@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>World Food Map — how grain and oilseeds move between countries</title>
+  <meta name="description" content="Interactive globe showing where each country's wheat, maize, rice, barley, soybeans and palm oil come from and go to, 2010 onward. Built on FAOSTAT." />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>World Food Map</h1>
+        <p class="tagline">Where the world&rsquo;s staple crops come from &mdash; and where they go.</p>
+      </div>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Switch colour theme">
+        <span class="theme-icon" aria-hidden="true"></span>
+      </button>
+    </header>
+
+    <div class="controls" role="group" aria-label="Visualisation controls">
+      <label class="ctl">
+        <span class="ctl-label">Commodity</span>
+        <select id="commodity" aria-label="Commodity"></select>
+      </label>
+
+      <div class="ctl">
+        <span class="ctl-label">View</span>
+        <div class="segmented" id="direction" role="radiogroup" aria-label="View">
+          <button type="button" role="radio" data-dir="world" aria-checked="true" class="on">World</button>
+          <button type="button" role="radio" data-dir="imports" aria-checked="false">Imports</button>
+          <button type="button" role="radio" data-dir="exports" aria-checked="false">Exports</button>
+        </div>
+      </div>
+
+      <div class="ctl ctl-year">
+        <span class="ctl-label">Year <output id="year-out">—</output></span>
+        <div class="year-row">
+          <button id="play" class="icon-btn play" type="button" aria-label="Play through years"></button>
+          <input id="year" type="range" min="0" max="0" step="1" value="0" aria-label="Year" />
+        </div>
+      </div>
+
+      <div class="ctl ctl-search">
+        <span class="ctl-label">Country</span>
+        <input id="country-search" type="search" list="country-list" placeholder="Search or click the map" autocomplete="off" />
+        <datalist id="country-list"></datalist>
+      </div>
+
+      <button id="projection" class="ghost-btn" type="button" aria-pressed="false">Flat map</button>
+    </div>
+
+    <main class="stage-wrap">
+      <div class="stage" id="stage">
+        <canvas id="globe"></canvas>
+        <div class="hint" id="hint">Drag to spin &middot; scroll to zoom &middot; click a country</div>
+        <div class="legend" id="legend" aria-hidden="true"></div>
+        <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
+        <div class="loading" id="loading"><span class="spinner"></span> Loading trade data&hellip;</div>
+      </div>
+
+      <aside class="panel" id="panel">
+        <div id="panel-body"></div>
+      </aside>
+    </main>
+
+    <footer class="foot">
+      <p>
+        Source: <a href="https://www.fao.org/faostat/en/#data/TM" rel="noopener">FAOSTAT Detailed Trade Matrix</a>
+        (bilateral flows) and <a href="https://www.fao.org/faostat/en/#data/FBS" rel="noopener">Food Balance Sheets</a>
+        (production and supply). Quantities in tonnes.
+        <button type="button" class="linkish" id="open-method">How to read this &amp; caveats</button>
+      </p>
+    </footer>
+  </div>
+
+  <dialog id="method">
+    <h2>How to read this</h2>
+    <div id="method-body"></div>
+    <form method="dialog"><button class="ghost-btn">Close</button></form>
+  </dialog>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
