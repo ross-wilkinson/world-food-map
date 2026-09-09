@@ -58,6 +58,20 @@
         <div class="legend" id="legend" aria-hidden="true"></div>
         <div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
         <div class="loading" id="loading"><span class="spinner"></span> Loading trade data&hellip;</div>
+        <script>
+          // Opened straight off disk, the module script and stylesheet are CORS-blocked
+          // (file:// is an opaque origin), so the app never boots and the spinner would
+          // sit there forever. This inline script still runs, so say what to do instead.
+          if (location.protocol === "file:") {
+            document.getElementById("loading").innerHTML =
+              '<div style="max-width:30rem;text-align:center;line-height:1.6">' +
+              '<strong>This page needs to be served, not opened from disk.</strong><br>' +
+              'Browsers block a <code>file://</code> page from loading its own scripts and data.<br><br>' +
+              'From the project folder run <code>npm run dev</code> and open ' +
+              '<code>http://localhost:5173</code> &mdash; or <code>npm run build</code> then ' +
+              '<code>npm run preview</code>.</div>';
+          }
+        </script>
       </div>
 
       <aside class="panel" id="panel">

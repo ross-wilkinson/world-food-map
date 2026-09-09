@@ -55,6 +55,18 @@ npm run dev          # http://localhost:5173
 The generated JSON in `web/public/data/` is committed, so the site runs without
 touching the pipeline.
 
+**It has to be served — opening `index.html` from disk will not work.** Browsers
+treat a `file://` page as an opaque origin and block it from loading its own module
+script, stylesheet and data, so the page sits on "Loading trade data…" forever. The
+page detects this and says so, but the fix is either `npm run dev`, or
+`npm run build && npm run preview` for the production bundle on
+<http://localhost:4173>.
+
+Served properly it loads in about 150 ms locally, ~0.8 s on typical broadband and
+~2 s on a slow connection: roughly 300 KB gzipped for the basemap, the wheat data
+and the bundle. Switching commodity fetches one more file (180–235 KB gzipped) and
+caches it for the session.
+
 ## Rebuilding the data
 
 Needs Python 3 (standard library only) and about 500 MB of disk for the archives.
