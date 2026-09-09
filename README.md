@@ -66,6 +66,10 @@ them would invent precision that isn't there.
   the aggregate cannot be built faithfully.
 - **Some traders have no polygon** at 110m resolution (Singapore, Hong Kong, Malta,
   small island states). They get arc endpoints and a "not on map" flag in the list.
+- **The basemap merges territories FAOSTAT reports separately.** Natural Earth draws
+  French Guiana as a polygon of "France", which would hit-test and shade a chunk of
+  South America with metropolitan France's balance. `scripts/basemap.mjs` splits it
+  into its own feature, where it correctly renders as no-data.
 
 ## Running it
 
@@ -136,6 +140,7 @@ scripts/
   download.mjs        fetch the FAOSTAT archives
   extract_trade.py    stream-filter the 8.5 GB trade matrix
   extract_fbs.py      pull production/supply elements
+  basemap.mjs         basemap, splitting territories the atlas merges into a parent
   centroids.mjs       arc anchors, from each country's largest polygon
   build.py            reconcile both sources -> web/public/data/*.json
   review.mjs          screenshot pass
