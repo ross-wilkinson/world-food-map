@@ -11,7 +11,10 @@ MIN_YEAR = 2010
 ITEMS = {"2511": "wheat", "2513": "barley", "2514": "maize",
          "2555": "soybeans", "2577": "palm_oil", "2807": "rice"}
 ELEMENTS = {"5511": "production", "5611": "imports", "5911": "exports",
-            "5301": "domestic_supply", "5142": "food", "5521": "feed"}
+            "5301": "domestic_supply", "5142": "food", "5521": "feed",
+            "5131": "processing",
+            # per-capita food use, already divided by population by FAO (kg/cap/yr)
+            "645": "food_per_capita"}
 PATTERNS = [(',"%s",' % c).encode() for c in ITEMS]
 
 units = {}

@@ -1,10 +1,11 @@
 /** Side panel: stat tiles plus the ranked partner list that carries the percentages. */
 import {
-  OTHER, PARTNER_BINS, WORLD_BINS, binIndex, pct, tonnes,
+  METRICS, OTHER, PARTNER_BINS, PERCAP_BINS, WORLD_BINS, binIndex, pct, tonnes,
+  worldTotalFor,
 } from "./model";
-import type { CountryYear, Direction, Meta, YearSlice } from "./model";
+import type { CountryYear, Direction, Meta, WorldMetric, YearSlice } from "./model";
 
-export type WorldMetric = "production" | "exports" | "imports";
+export type { WorldMetric };
 
 export interface PanelState {
   meta: Meta;
@@ -46,13 +47,12 @@ function worldHtml(s: PanelState): string {
     ? (s.direction === "imports" ? "imports" : "exports")
     : s.worldMetric;
 
-  const denom =
-    metric === "production" ? slice.world.production
-      : metric === "exports" ? slice.world.exports : slice.world.imports;
+  const spec = METRICS[metric];
+  const denom = worldTotalFor(slice.world, metric);
+  const absolute = spec.mode === "absolute";
 
-  const key = metric === "production" ? "p" : metric === "exports" ? "ex" : "im";
   const rows = Object.entries(slice.c)
-    .map(([id, r]) => [id, (r as any)[key] as number | undefined] as const)
+    .map(([id, r]) => [id, (r as any)[spec.key] as number | undefined] as const)
     .filter((kv): kv is readonly [string, number] => !!kv[1] && kv[1] > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 25);
@@ -60,6 +60,8 @@ function worldHtml(s: PanelState): string {
   const traded = slice.world.production
     ? (slice.world.exports / slice.world.production) * 100 : NaN;
   const ratio = slice.world.exports ? slice.world.imports / slice.world.exports : NaN;
+  const eatenShare = slice.world.production
+    ? (slice.world.food / slice.world.production) * 100 : NaN;
 
   const head = needsPick
     ? `<h2>Pick a country</h2>
@@ -71,9 +73,21 @@ function worldHtml(s: PanelState): string {
        <div class="tiles">
          <div class="tile"><div class="tile-label">World production</div>
            <div class="tile-value">${tonnes(slice.world.production)}</div></div>
-         <div class="tile"><div class="tile-label">World ${metric === "imports" ? "imports" : "exports"}</div>
-           <div class="tile-value">${tonnes(metric === "imports" ? slice.world.imports : slice.world.exports)}</div></div>
-         ${metric === "imports" ? `
+         ${metric === "percap"
+           ? `<div class="tile"><div class="tile-label">World average, per person</div>
+              <div class="tile-value">${slice.world.foodPerCapita.toFixed(0)} kg</div></div>`
+           : metric === "food"
+           ? `<div class="tile"><div class="tile-label">Eaten by people</div>
+              <div class="tile-value">${tonnes(slice.world.food)}</div></div>`
+           : `<div class="tile"><div class="tile-label">World ${metric === "imports" ? "imports" : "exports"}</div>
+              <div class="tile-value">${tonnes(metric === "imports" ? slice.world.imports : slice.world.exports)}</div></div>`}
+         ${metric === "food" || metric === "percap" ? `
+         <div class="tile wide"><div class="tile-label">Share of the crop that people eat directly</div>
+           <div class="tile-value">${pct(eatenShare)}</div>
+           <div class="tile-note">The rest is animal feed, seed, industrial use or loss.
+             ${metric === "percap"
+               ? "Per-person figures below count only the part people eat, so a big feed-grain buyer can rank low."
+               : "Food use, not imports, is who actually eats it."}</div></div>` : metric === "imports" ? `
          <div class="tile wide"><div class="tile-label">World imports measured against world exports</div>
            <div class="tile-value">${ratio.toFixed(2)}&times;</div>
            <div class="tile-note">Every tonne shipped is imported once, so this should be 1&times;.
@@ -93,23 +107,28 @@ function worldHtml(s: PanelState): string {
              class="${metric === "exports" ? "on" : ""}">Exports</button>
            <button type="button" role="radio" data-m="imports" aria-checked="${metric === "imports"}"
              class="${metric === "imports" ? "on" : ""}">Imports</button>
+           <button type="button" role="radio" data-m="food" aria-checked="${metric === "food"}"
+             class="${metric === "food" ? "on" : ""}">Food use</button>
+           <button type="button" role="radio" data-m="percap" aria-checked="${metric === "percap"}"
+             class="${metric === "percap" ? "on" : ""}">Per person</button>
          </div>
        </div>`;
 
-  const label = metric === "production" ? "producers" : metric === "exports" ? "exporters" : "importers";
   // Bars are scaled to the leader, the way a bar chart's axis is; the label
-  // carries the true share, which is rarely anywhere near 100%.
+  // carries the true value, which is rarely anywhere near the maximum.
   const top = rows[0]?.[1] ?? 1;
   const items = rows.map(([id, v]) => {
-    const share = denom ? (v / denom) * 100 : 0;
-    const c = s.ramp[binIndex(share, WORLD_BINS)]!;
-    return row(id, nameOf(meta, id), share, v, c, (v / top) * 100, meta);
+    const scale = absolute ? v : denom ? (v / denom) * 100 : 0;
+    const c = s.ramp[binIndex(scale, absolute ? PERCAP_BINS : WORLD_BINS)]!;
+    const value = absolute ? `${v.toFixed(0)} kg` : pct(scale);
+    const title = absolute ? `${v.toFixed(1)} kg per person per year` : tonnes(v);
+    return row(id, nameOf(meta, id), value, title, c, (v / top) * 100, meta);
   }).join("");
 
   return `${head}
     <div class="rank-head">
-      <h3>Top ${label}, ${s.year}</h3>
-      <span class="total">${tonnes(denom)} total</span>
+      <h3>Top ${spec.rank}, ${s.year}</h3>
+      <span class="total">${absolute ? `world average ${denom.toFixed(0)} kg` : `${tonnes(denom)} total`}</span>
     </div>
     <ol class="rank">${items || `<li class="other">No data for this year.</li>`}</ol>
     <p class="note">${esc(s.commodityNote)}</p>`;
@@ -146,7 +165,7 @@ function countryHtml(s: PanelState): string {
   const items = list.map(([pid, v]) => {
     const share = total ? (v / total) * 100 : 0;
     const shade = s.flowRamp[binIndex(share, PARTNER_BINS)]!;
-    return row(pid, nameOf(meta, pid), share, v, shade, (v / top) * 100, meta);
+    return row(pid, nameOf(meta, pid), pct(share), tonnes(v), shade, (v / top) * 100, meta);
   }).join("");
 
   const coverage = fbsTotal && total ? (total / fbsTotal) * 100 : NaN;
@@ -212,14 +231,14 @@ function countryHtml(s: PanelState): string {
 
 /* --------------------------------------------------------------------- shared */
 
-function row(id: string, nm: string, share: number, v: number, color: string,
+function row(id: string, nm: string, value: string, title: string, color: string,
              barPct: number, meta: Meta): string {
   const off = id !== OTHER && meta.countries[id] && !meta.countries[id]!.onMap
     ? ` <span class="off">not on map</span>` : "";
   const cls = id === OTHER ? "other" : "";
-  return `<li class="${cls}" data-id="${esc(id)}" title="${esc(nm)}: ${tonnes(v)}">
+  return `<li class="${cls}" data-id="${esc(id)}" title="${esc(nm)}: ${esc(title)}">
     <span class="nm">${esc(nm)}${off}</span>
-    <span class="pc">${pct(share)}</span>
+    <span class="pc">${value}</span>
     <span class="bar"><i style="width:${Math.max(1.5, Math.min(100, barPct)).toFixed(2)}%;background:${color}"></i></span>
   </li>`;
 }

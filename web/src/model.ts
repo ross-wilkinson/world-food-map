@@ -3,6 +3,9 @@ import { interpolateLab } from "d3-interpolate";
 
 export type Direction = "world" | "imports" | "exports";
 
+/** What the world view ranks and shades by. */
+export type WorldMetric = "production" | "exports" | "imports" | "food" | "percap";
+
 /** Sentinel the build script uses for the folded-up long tail of small partners. */
 export const OTHER = "ZZZ";
 
@@ -27,6 +30,9 @@ export interface CountryYear {
   ds?: number;  // domestic supply (FBS)
   im?: number;  // total imports (FBS)
   ex?: number;  // total exports (FBS)
+  f?: number;   // food use -- the part actually eaten by people (FBS)
+  fd?: number;  // feed
+  fpc?: number; // food supply, kg per person per year (FBS)
   i?: [string, number][];  // bilateral import sources
   iT?: number;             // their total
   iM?: 1;                  // sources were mirrored from partners' export reports
@@ -36,7 +42,8 @@ export interface CountryYear {
 }
 
 export interface YearSlice {
-  world: { production: number; exports: number; imports: number };
+  world: { production: number; exports: number; imports: number;
+           food: number; foodPerCapita: number };
   c: Record<string, CountryYear>;
 }
 
@@ -118,8 +125,31 @@ export function binIndex(value: number, bins: number[]): number {
   return i;
 }
 
-export function binLabels(bins: number[]): string[] {
-  return [`<${bins[0]}%`, ...bins.map((b) => `${b}%`)];
+export function binLabels(bins: number[], unit = "%"): string[] {
+  return [`<${bins[0]}${unit}`, ...bins.map((b) => `${b}${unit}`)];
+}
+
+/**
+ * Direct food use per person, kg/year. This one is shaded by its own value rather
+ * than as a share of a world total: "3% of the world's eating" says nothing about
+ * a diet, whereas "180 kg a year" does.
+ */
+export const PERCAP_BINS = [5, 20, 50, 80, 120, 170];
+
+export const METRICS: Record<WorldMetric, {
+  key: "p" | "ex" | "im" | "f" | "fpc";
+  noun: string; rank: string; mode: "share" | "absolute";
+}> = {
+  production: { key: "p",   noun: "production",  rank: "producers", mode: "share" },
+  exports:    { key: "ex",  noun: "exports",     rank: "exporters", mode: "share" },
+  imports:    { key: "im",  noun: "imports",     rank: "importers", mode: "share" },
+  food:       { key: "f",   noun: "food use",    rank: "consumers", mode: "share" },
+  percap:     { key: "fpc", noun: "eaten per person", rank: "eaters", mode: "absolute" },
+};
+
+export function worldTotalFor(w: YearSlice["world"], m: WorldMetric): number {
+  return m === "production" ? w.production : m === "exports" ? w.exports
+    : m === "imports" ? w.imports : m === "food" ? w.food : w.foodPerCapita;
 }
 
 /**

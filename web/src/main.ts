@@ -2,12 +2,12 @@
 import { Globe } from "./globe";
 import type { Arc } from "./globe";
 import { renderPanel } from "./panel";
-import type { WorldMetric } from "./panel";
 import {
-  OTHER, PARTNER_BINS, WORLD_BINS, binIndex, binLabels, dirRamp,
-  loadCommodity, loadMeta, loadTopology, mix, pct, readRamp, readVar, tonnes,
+  METRICS, OTHER, PARTNER_BINS, PERCAP_BINS, WORLD_BINS, binIndex, binLabels,
+  dirRamp, loadCommodity, loadMeta, loadTopology, mix, pct, readRamp, readVar,
+  tonnes, worldTotalFor,
 } from "./model";
-import type { CommodityData, Direction, Meta, YearSlice } from "./model";
+import type { CommodityData, Direction, Meta, WorldMetric, YearSlice } from "./model";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -109,11 +109,7 @@ function worldMetric(): WorldMetric {
   return state.direction === "imports" ? "imports" : "exports";
 }
 
-function worldTotal(s: YearSlice, m: WorldMetric): number {
-  return m === "production" ? s.world.production : m === "exports" ? s.world.exports : s.world.imports;
-}
 
-const METRIC_KEY = { production: "p", exports: "ex", imports: "im" } as const;
 
 /* ---------------------------------------------------------------------- update */
 
@@ -160,13 +156,16 @@ function buildFill(s: YearSlice, ramp: string[], flowRamp: string[], showFlows: 
     shades.set(state.selected!, mix(readVar("--land"), readVar("--ink"), 0.22));
   } else {
     const m = worldMetric();
-    const key = METRIC_KEY[m];
-    const denom = worldTotal(s, m);
-    if (denom) {
+    const spec = METRICS[m];
+    const absolute = spec.mode === "absolute";
+    const denom = worldTotalFor(s.world, m);
+    if (denom || absolute) {
       for (const [id, r] of Object.entries(s.c)) {
-        const v = (r as any)[key] as number | undefined;
+        const v = (r as any)[spec.key] as number | undefined;
         if (!v || v <= 0) continue;
-        shades.set(id, ramp[binIndex((v / denom) * 100, WORLD_BINS)]!);
+        // per-person is shaded by its own value; the others by share of the world total
+        const scale = absolute ? v : (v / denom) * 100;
+        shades.set(id, ramp[binIndex(scale, absolute ? PERCAP_BINS : WORLD_BINS)]!);
       }
     }
   }
@@ -209,9 +208,13 @@ function renderLegend(s: YearSlice, ramp: string[], flowRamp: string[], showFlow
     colors = flowRamp;
     labels = binLabels(PARTNER_BINS);
   } else {
-    title = `Share of world ${worldMetric()}, ${year()}`;
+    const m = worldMetric();
+    const absolute = METRICS[m].mode === "absolute";
+    title = absolute
+      ? `${state.meta.commodities.find((c) => c.id === state.commodity)!.name} eaten per person, ${year()}`
+      : `Share of world ${METRICS[m].noun}, ${year()}`;
     colors = ramp;
-    labels = binLabels(WORLD_BINS);
+    labels = absolute ? binLabels(PERCAP_BINS, " kg") : binLabels(WORLD_BINS);
   }
   const arcNote = showFlows && ((s.c[state.selected!]?.[state.direction === "imports" ? "i" : "e"]?.length ?? 0) > MAX_ARCS)
     ? `<div style="margin-top:5px">Top ${MAX_ARCS} flows drawn; the panel lists them all.</div>` : "";
@@ -270,11 +273,13 @@ function showTooltip(id: string | null, x: number, y: number) {
         : `not among ${state.meta.countries[state.selected]!.name}'s reported ${state.direction}`;
     } else {
       const m = worldMetric();
-      const denom = worldTotal(s, m);
-      const v = (r as any)[METRIC_KEY[m]] as number | undefined;
-      detail = v
-        ? `${tonnes(v)} &middot; ${pct(denom ? (v / denom) * 100 : NaN)} of world ${m}`
-        : `no ${m} reported`;
+      const spec = METRICS[m];
+      const denom = worldTotalFor(s.world, m);
+      const v = (r as any)[spec.key] as number | undefined;
+      detail = !v ? `no ${spec.noun} reported`
+        : spec.mode === "absolute"
+          ? `${v.toFixed(1)} kg per person per year`
+          : `${tonnes(v)} &middot; ${pct(denom ? (v / denom) * 100 : NaN)} of world ${spec.noun}`;
     }
   }
   const rect = el.stage.getBoundingClientRect();

@@ -13,6 +13,11 @@ globe can only ever show you one hemisphere.
 - **What share of the world's wheat comes from any one country?** The world view
   shades every country by its share of global production, exports or imports —
   who grows it, who sells it, who buys it.
+- **Who actually eats it?** *Food use* counts only the part people eat, not the
+  much larger flow going to animal feed — 88% of the world's maize never reaches a
+  human plate. *Per person* switches to kg/person/year, which is shaded by its own
+  value rather than as a share of a world total, because "3% of world eating" says
+  nothing about a diet while "128 kg a year" does.
 - **Where does a country's supply actually come from?** Ranked partners with
   percentages, drawn as arcs weighted by volume.
 - **How exposed is a country?** Imports as a share of domestic supply, exports as a

@@ -121,9 +121,10 @@ select:focus-visible, input:focus-visible, button:focus-visible {
 }
 
 .segmented {
-  display: flex; background: var(--plane); border: 1px solid var(--border);
-  border-radius: 7px; padding: 2px; height: 32px;
+  display: flex; flex-wrap: wrap; background: var(--plane);
+  border: 1px solid var(--border); border-radius: 7px; padding: 2px; min-height: 32px;
 }
+.segmented button { height: 26px; }
 .segmented button {
   font: inherit; font-size: 13px; color: var(--ink-2); background: none;
   border: 0; border-radius: 5px; padding: 0 11px; cursor: pointer; white-space: nowrap;

@@ -229,10 +229,16 @@ def write_commodity(spec, years, direct, fbs, world_fbs, coords, names):
             rec = {}
             bal = f.get(code, {})
             for key, el in (("p", "production"), ("ds", "domestic_supply"),
-                            ("im", "imports"), ("ex", "exports")):
+                            ("im", "imports"), ("ex", "exports"),
+                            ("f", "food"), ("fd", "feed")):
                 v = bal.get(el)
                 if v:
                     rec[key] = round(v)
+            # kg/person/year, already per-capita in FBS -- keep a decimal, since
+            # rounding to whole kg would erase the low-consumption countries
+            v = bal.get("food_per_capita")
+            if v:
+                rec["fpc"] = round(v, 1)
 
             # A country's own customs report is the better source for its own
             # flows; only fall back to what its partners reported if it is silent.
@@ -263,7 +269,9 @@ def write_commodity(spec, years, direct, fbs, world_fbs, coords, names):
         out["years"][str(year)] = {
             "world": {"production": round(w.get("production", 0)),
                       "exports": round(w.get("exports", 0)),
-                      "imports": round(w.get("imports", 0))},
+                      "imports": round(w.get("imports", 0)),
+                      "food": round(w.get("food", 0)),
+                      "foodPerCapita": round(w.get("food_per_capita", 0), 1)},
             "c": entries,
         }
 
