@@ -17,7 +17,7 @@ export interface CountryMeta {
 export interface Meta {
   generated: string;
   years: number[];
-  commodities: { id: string; name: string; note: string }[];
+  commodities: { id: string; name: string; primary: string; note: string }[];
   countries: Record<string, CountryMeta>;
 }
 

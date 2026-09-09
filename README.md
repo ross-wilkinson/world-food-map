@@ -40,8 +40,10 @@ them would invent precision that isn't there.
   is credited to the last shipper, not the field.
 - **Arcs are links, not routes.** Great circles show what connects to what, not the
   sea lane the cargo followed.
-- **Named partners can undercount.** Where bilateral detail covers less than 95% of a
-  country's reported total, the panel says what fraction is accounted for.
+- **The two totals on screen are different baskets.** The tiles count the crop *and
+  its processed products* in primary equivalent; the ranked list counts the primary
+  commodity only. For US wheat that is 12 Mt vs 2.5 Mt — not a reporting gap but a
+  scope difference, and the panel says so wherever the two diverge.
 - **Some traders have no polygon** at 110m resolution (Singapore, Hong Kong, Malta,
   small island states). They get arc endpoints and a "not on map" flag in the list.
 

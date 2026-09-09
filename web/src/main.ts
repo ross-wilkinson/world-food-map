@@ -135,6 +135,7 @@ function update() {
 
   renderPanel(el.panel, {
     meta: state.meta, slice: s, commodityName: commoditySpec().name,
+    commodityPrimary: commoditySpec().primary,
     commodityNote: commoditySpec().note, year: year(), direction: state.direction,
     selected: state.selected, worldMetric: state.worldMetric, ramp, flowRamp,
   }, {

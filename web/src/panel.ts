@@ -10,6 +10,7 @@ export interface PanelState {
   meta: Meta;
   slice: YearSlice;
   commodityName: string;
+  commodityPrimary: string;
   commodityNote: string;
   year: number;
   direction: Direction;
@@ -150,9 +151,9 @@ function countryHtml(s: PanelState): string {
       mirrored from what its trading partners reported.`);
   }
   if (isFinite(coverage) && coverage < 95) {
-    notes.push(`Named partners account for ${pct(coverage, 0)} of
-      ${esc(nm)}'s reported ${imports ? "imports" : "exports"}; the remainder is
-      trade its partners did not break down by counterpart.`);
+    notes.push(`Percentages in this list are shares of ${tonnes(total)} of
+      ${esc(s.commodityPrimary)} &mdash; not of the ${tonnes(fbsTotal!)} in the tiles, which also
+      counts processed products. A gap can also mean trade never broken down by counterpart.`);
   }
   notes.push(esc(s.commodityNote));
 
@@ -176,9 +177,11 @@ function countryHtml(s: PanelState): string {
         <div class="tile-note">${isFinite(worldExp) && worldExp > 0
           ? `${esc(nm)} supplies ${pct(worldExp)} of world exports.` : "&nbsp;"}</div></div>
     </div>
+    <p class="basis">Figures above cover ${esc(s.commodityName.toLowerCase())}
+      <b>and its processed products</b>, counted in ${esc(s.commodityPrimary)} equivalent.</p>
     <div class="rank-head">
       <h3>${imports ? "Where it comes from" : "Where it goes"}</h3>
-      <span class="total">${tonnes(total)}</span>
+      <span class="total">${tonnes(total)} of ${esc(s.commodityPrimary)}</span>
     </div>
     <ol class="rank">${items || `<li class="other">No bilateral detail reported.</li>`}</ol>
     <p class="note">${notes.join(" ")}</p>`;

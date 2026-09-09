@@ -21,16 +21,22 @@ OUT_DIR = "web/public/data"
 # aggregate -- summing the individual rice items instead would double count.
 COMMODITIES = [
     {"id": "wheat",    "name": "Wheat",       "trade_items": ["15"],  "fbs": "wheat",
+     "primary": "grain",
      "note": "Trade shares cover wheat grain; flour and other products are excluded."},
     {"id": "maize",    "name": "Maize (corn)", "trade_items": ["56"], "fbs": "maize",
+     "primary": "grain",
      "note": "Trade shares cover maize grain, which is dominated by feed use."},
     {"id": "rice",     "name": "Rice",        "trade_items": ["30"],  "fbs": "rice",
+     "primary": "milled rice",
      "note": "Trade shares use FAO's rice milled-equivalent aggregate."},
     {"id": "soybeans", "name": "Soybeans",    "trade_items": ["236"], "fbs": "soybeans",
+     "primary": "whole beans",
      "note": "Trade shares cover the whole bean; soybean oil and meal are excluded."},
     {"id": "barley",   "name": "Barley",      "trade_items": ["44"],  "fbs": "barley",
+     "primary": "grain",
      "note": "Trade shares cover barley grain, largely for feed and malting."},
     {"id": "palm_oil", "name": "Palm oil",    "trade_items": ["257"], "fbs": "palm_oil",
+     "primary": "oil",
      "note": "Trade shares cover palm oil; palm kernel oil is a separate commodity."},
 ]
 
@@ -188,7 +194,8 @@ def main():
     meta = {
         "generated": datetime.date.today().isoformat(),
         "years": years,
-        "commodities": [{"id": c["id"], "name": c["name"], "note": c["note"]} for c in COMMODITIES],
+        "commodities": [{"id": c["id"], "name": c["name"], "primary": c["primary"],
+                         "note": c["note"]} for c in COMMODITIES],
         "countries": countries,
     }
     json.dump(meta, open(f"{OUT_DIR}/meta.json", "w", encoding="utf-8"),

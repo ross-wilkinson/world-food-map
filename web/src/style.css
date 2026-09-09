@@ -245,6 +245,8 @@ input[type="range"] { flex: 1; accent-color: var(--imports); min-width: 120px; }
 .rank li.other:hover { background: none; }
 .rank .off { font-size: 10px; color: var(--ink-muted); }
 
+.basis { margin: -4px 0 0; font-size: 11px; color: var(--ink-muted); line-height: 1.45; }
+.basis b { color: var(--ink-2); font-weight: 600; }
 .empty { color: var(--ink-2); font-size: 13px; padding: 24px 0; }
 .note { font-size: 11px; color: var(--ink-muted); margin-top: 12px; line-height: 1.45; }
 
