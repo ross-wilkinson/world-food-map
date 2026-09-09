@@ -145,15 +145,32 @@ function countryHtml(s: PanelState): string {
   }).join("");
 
   const coverage = fbsTotal && total ? (total / fbsTotal) * 100 : NaN;
+  // Where the FBS total exceeds what is attributable to named partners, show the
+  // split explicitly. FAO publishes no bilateral detail for the products component,
+  // so the remainder is genuinely unattributable rather than merely missing.
+  const gap = fbsTotal && total && fbsTotal > total * 1.02
+    ? { named: total, rest: fbsTotal - total, pct: (total / fbsTotal) * 100 } : null;
+  const splitHtml = gap ? `
+    <div class="split">
+      <div class="split-bar">
+        <i style="width:${gap.pct.toFixed(1)}%;background:${s.flowRamp[6]}"></i>
+        <i style="width:${(100 - gap.pct).toFixed(1)}%"></i>
+      </div>
+      <div class="split-key">
+        <span><b>${tonnes(gap.named)}</b> ${esc(s.commodityPrimary)}, sourced below</span>
+        <span><b>${tonnes(gap.rest)}</b> products &amp; unallocated</span>
+      </div>
+    </div>` : "";
   const notes: string[] = [];
   if (mirrored) {
     notes.push(`${esc(nm)} did not report these flows for ${s.year}; the breakdown is
       mirrored from what its trading partners reported.`);
   }
   if (isFinite(coverage) && coverage < 95) {
-    notes.push(`Percentages in this list are shares of ${tonnes(total)} of
-      ${esc(s.commodityPrimary)} &mdash; not of the ${tonnes(fbsTotal!)} in the tiles, which also
-      counts processed products. A gap can also mean trade never broken down by counterpart.`);
+    notes.push(`FAOSTAT publishes country-by-country detail only for
+      ${esc(s.commodityPrimary)}, not for the processed-product part of the
+      ${tonnes(fbsTotal!)} total, so the remainder cannot be traced to a source.
+      Percentages below are shares of the ${tonnes(total)}.`);
   }
   notes.push(esc(s.commodityNote));
 
@@ -179,6 +196,7 @@ function countryHtml(s: PanelState): string {
     </div>
     <p class="basis">Figures above cover ${esc(s.commodityName.toLowerCase())}
       <b>and its processed products</b>, counted in ${esc(s.commodityPrimary)} equivalent.</p>
+    ${splitHtml}
     <div class="rank-head">
       <h3>${imports ? "Where it comes from" : "Where it goes"}</h3>
       <span class="total">${tonnes(total)} of ${esc(s.commodityPrimary)}</span>

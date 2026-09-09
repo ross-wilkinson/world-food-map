@@ -43,7 +43,11 @@ them would invent precision that isn't there.
 - **The two totals on screen are different baskets.** The tiles count the crop *and
   its processed products* in primary equivalent; the ranked list counts the primary
   commodity only. For US wheat that is 12 Mt vs 2.5 Mt — not a reporting gap but a
-  scope difference, and the panel says so wherever the two diverge.
+  scope difference. Where they diverge the panel shows the split explicitly, because
+  FAOSTAT publishes no country-by-country detail for the products component.
+  Soybeans and palm oil are single FBS items, so they reconcile at 100% and no split
+  is shown. `scripts/extract_products.py` records why a grain/products breakdown of
+  the aggregate cannot be built faithfully.
 - **Some traders have no polygon** at 110m resolution (Singapore, Hong Kong, Malta,
   small island states). They get arc endpoints and a "not on map" flag in the list.
 

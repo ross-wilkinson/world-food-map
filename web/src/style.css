@@ -245,6 +245,11 @@ input[type="range"] { flex: 1; accent-color: var(--imports); min-width: 120px; }
 .rank li.other:hover { background: none; }
 .rank .off { font-size: 10px; color: var(--ink-muted); }
 
+.split { margin: 12px 0 0; }
+.split-bar { display: flex; gap: 2px; height: 8px; margin-bottom: 6px; }
+.split-bar i { display: block; border-radius: 2px; background: var(--hairline); }
+.split-key { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-muted); }
+.split-key b { color: var(--ink-2); font-weight: 620; font-variant-numeric: tabular-nums; }
 .basis { margin: -4px 0 0; font-size: 11px; color: var(--ink-muted); line-height: 1.45; }
 .basis b { color: var(--ink-2); font-weight: 600; }
 .empty { color: var(--ink-2); font-size: 13px; padding: 24px 0; }
