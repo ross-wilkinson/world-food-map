@@ -1,7 +1,6 @@
 /** Side panel: stat tiles plus the ranked partner list that carries the percentages. */
 import {
-  METRICS, OTHER, PARTNER_BINS, PERCAP_BINS, WORLD_BINS, binIndex, pct, tonnes,
-  worldTotalFor,
+  METRICS, OTHER, PARTNER_BINS, binIndex, pct, scaleFor, tonnes, worldTotalFor,
 } from "./model";
 import type { CountryYear, Direction, Meta, WorldMetric, YearSlice } from "./model";
 
@@ -52,9 +51,13 @@ function worldHtml(s: PanelState): string {
   const absolute = spec.mode === "absolute";
 
   const rows = Object.entries(slice.c)
-    .map(([id, r]) => [id, (r as any)[spec.key] as number | undefined] as const)
-    .filter((kv): kv is readonly [string, number] => !!kv[1] && kv[1] > 0)
-    .sort((a, b) => b[1] - a[1])
+    .filter(([, r]) => !spec.minSupply || (r.ds ?? 0) >= spec.minSupply)
+    .map(([id, r]) => [id, spec.value(r), r.ds ?? 0] as const)
+    .filter((kv): kv is readonly [string, number, number] =>
+      kv[1] !== undefined && (spec.mode === "diverging" ? kv[1] >= 0 : kv[1] > 0))
+    // ties at 0% are common (plenty of countries grow no wheat at all), so break
+    // them by how much the country actually uses -- the biggest are the story
+    .sort((a, b) => (spec.sort === "asc" ? a[1] - b[1] || b[2] - a[2] : b[1] - a[1]))
     .slice(0, 25);
 
   const traded = slice.world.production
@@ -62,6 +65,8 @@ function worldHtml(s: PanelState): string {
   const ratio = slice.world.exports ? slice.world.imports / slice.world.exports : NaN;
   const eatenShare = slice.world.production
     ? (slice.world.food / slice.world.production) * 100 : NaN;
+  const rated = Object.values(slice.c).filter((r) => (r.ds ?? 0) >= 50000);
+  const leaning = rated.filter((r) => ((r.p ?? 0) / r.ds!) * 100 < 50).length;
 
   const head = needsPick
     ? `<h2>Pick a country</h2>
@@ -73,7 +78,10 @@ function worldHtml(s: PanelState): string {
        <div class="tiles">
          <div class="tile"><div class="tile-label">World production</div>
            <div class="tile-value">${tonnes(slice.world.production)}</div></div>
-         ${metric === "percap"
+         ${metric === "reliance"
+           ? `<div class="tile"><div class="tile-label">Grow under half what they use</div>
+              <div class="tile-value">${leaning}<span style="font-size:13px;font-weight:400"> of ${rated.length}</span></div></div>`
+           : metric === "percap"
            ? `<div class="tile"><div class="tile-label">World average, per person</div>
               <div class="tile-value">${slice.world.foodPerCapita.toFixed(0)} kg</div></div>`
            : metric === "food"
@@ -81,7 +89,14 @@ function worldHtml(s: PanelState): string {
               <div class="tile-value">${tonnes(slice.world.food)}</div></div>`
            : `<div class="tile"><div class="tile-label">World ${metric === "imports" ? "imports" : "exports"}</div>
               <div class="tile-value">${tonnes(metric === "imports" ? slice.world.imports : slice.world.exports)}</div></div>`}
-         ${metric === "food" || metric === "percap" ? `
+         ${metric === "reliance" ? `
+         <div class="tile wide"><div class="tile-label">100% means a country grows exactly what it uses</div>
+           <div class="tile-value" style="font-size:13px;font-weight:500;letter-spacing:0">Two different exposures</div>
+           <div class="tile-note">Below 100% a country depends on other harvests and other
+             governments' export rules &mdash; the harder one to escape, since capacity cannot be
+             grown in a season. Above it, the risk is its own weather and its export markets,
+             which buying abroad can usually cover. Neither end is coloured as the bad one.</div></div>`
+           : metric === "food" || metric === "percap" ? `
          <div class="tile wide"><div class="tile-label">Share of the crop that people eat directly</div>
            <div class="tile-value">${pct(eatenShare)}</div>
            <div class="tile-note">The rest is animal feed, seed, industrial use or loss.
@@ -111,6 +126,8 @@ function worldHtml(s: PanelState): string {
              class="${metric === "food" ? "on" : ""}">Food use</button>
            <button type="button" role="radio" data-m="percap" aria-checked="${metric === "percap"}"
              class="${metric === "percap" ? "on" : ""}">Per person</button>
+           <button type="button" role="radio" data-m="reliance" aria-checked="${metric === "reliance"}"
+             class="${metric === "reliance" ? "on" : ""}">Reliance</button>
          </div>
        </div>`;
 
@@ -118,17 +135,25 @@ function worldHtml(s: PanelState): string {
   // carries the true value, which is rarely anywhere near the maximum.
   const top = rows[0]?.[1] ?? 1;
   const items = rows.map(([id, v]) => {
-    const scale = absolute ? v : denom ? (v / denom) * 100 : 0;
-    const c = s.ramp[binIndex(scale, absolute ? PERCAP_BINS : WORLD_BINS)]!;
-    const value = absolute ? `${v.toFixed(0)} kg` : pct(scale);
-    const title = absolute ? `${v.toFixed(1)} kg per person per year` : tonnes(v);
-    return row(id, nameOf(meta, id), value, title, c, (v / top) * 100, meta);
+    const scale = spec.mode === "share" ? (denom ? (v / denom) * 100 : 0) : v;
+    const c = s.ramp[binIndex(scale, scaleFor(metric).bins)]!;
+    const value = spec.mode === "absolute" ? `${v.toFixed(0)} kg`
+      : spec.mode === "diverging" ? `${v.toFixed(0)}%` : pct(scale);
+    const title = spec.mode === "absolute" ? `${v.toFixed(1)} kg per person per year`
+      : spec.mode === "diverging" ? `grows ${v.toFixed(0)}% of what it uses`
+      : tonnes(v);
+    // for reliance the bar shows the share NOT grown at home, so the longest bar
+    // is the most import-reliant country rather than the largest producer
+    const bar = spec.mode === "diverging"
+      ? Math.max(0, Math.min(100, 100 - v)) : (v / top) * 100;
+    return row(id, nameOf(meta, id), value, title, c, bar, meta);
   }).join("");
 
   return `${head}
     <div class="rank-head">
-      <h3>Top ${spec.rank}, ${s.year}</h3>
-      <span class="total">${absolute ? `world average ${denom.toFixed(0)} kg` : `${tonnes(denom)} total`}</span>
+      <h3>${spec.mode === "diverging" ? "" : "Top "}${spec.rank}, ${s.year}</h3>
+      <span class="total">${spec.mode === "diverging" ? "% grown at home"
+        : absolute ? `world average ${denom.toFixed(0)} kg` : `${tonnes(denom)} total`}</span>
     </div>
     <ol class="rank">${items || `<li class="other">No data for this year.</li>`}</ol>
     <p class="note">${esc(s.commodityNote)}</p>`;

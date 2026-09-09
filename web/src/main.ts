@@ -3,9 +3,9 @@ import { Globe } from "./globe";
 import type { Arc } from "./globe";
 import { renderPanel } from "./panel";
 import {
-  METRICS, OTHER, PARTNER_BINS, PERCAP_BINS, WORLD_BINS, binIndex, binLabels,
-  dirRamp, loadCommodity, loadMeta, loadTopology, mix, pct, readRamp, readVar,
-  tonnes, worldTotalFor,
+  METRICS, OTHER, PARTNER_BINS, binIndex, binLabels, dirRamp,
+  divergingRamp, loadCommodity, loadMeta, loadTopology, mix, pct, readRamp,
+  readVar, scaleFor, tonnes, worldTotalFor,
 } from "./model";
 import type { CommodityData, Direction, Meta, WorldMetric, YearSlice } from "./model";
 
@@ -124,16 +124,17 @@ function update() {
   el.year.value = String(state.yearIdx);
 
   const showFlows = state.direction !== "world" && !!state.selected;
-  globe.setFill(buildFill(s, ramp, flowRamp, showFlows));
+  const worldRamp = METRICS[worldMetric()].mode === "diverging" ? divergingRamp() : ramp;
+  globe.setFill(buildFill(s, worldRamp, flowRamp, showFlows));
   globe.setArcs(showFlows ? buildArcs(s) : [], color);
   globe.setSelected(state.selected);
-  renderLegend(s, ramp, flowRamp, showFlows);
+  renderLegend(s, worldRamp, flowRamp, showFlows);
 
   renderPanel(el.panel, {
     meta: state.meta, slice: s, commodityName: commoditySpec().name,
     commodityPrimary: commoditySpec().primary,
     commodityNote: commoditySpec().note, year: year(), direction: state.direction,
-    selected: state.selected, worldMetric: state.worldMetric, ramp, flowRamp,
+    selected: state.selected, worldMetric: state.worldMetric, ramp: worldRamp, flowRamp,
   }, {
     onSelect: (id) => selectCountry(id, true),
     onHoverPartner: (id) => { state.hoverPartner = id; globe.setHighlight(id); },
@@ -157,15 +158,16 @@ function buildFill(s: YearSlice, ramp: string[], flowRamp: string[], showFlows: 
   } else {
     const m = worldMetric();
     const spec = METRICS[m];
-    const absolute = spec.mode === "absolute";
     const denom = worldTotalFor(s.world, m);
-    if (denom || absolute) {
+    if (denom || spec.mode !== "share") {
       for (const [id, r] of Object.entries(s.c)) {
-        const v = (r as any)[spec.key] as number | undefined;
-        if (!v || v <= 0) continue;
-        // per-person is shaded by its own value; the others by share of the world total
-        const scale = absolute ? v : (v / denom) * 100;
-        shades.set(id, ramp[binIndex(scale, absolute ? PERCAP_BINS : WORLD_BINS)]!);
+        const v = spec.value(r);
+        if (v === undefined || (spec.mode === "diverging" ? v < 0 : v <= 0)) continue;
+        if (spec.minSupply && (r.ds ?? 0) < spec.minSupply) continue;
+        // share metrics are shaded by their share of the world total; per-person and
+        // self-sufficiency are shaded by their own value
+        const scale = spec.mode === "share" ? (v / denom) * 100 : v;
+        shades.set(id, ramp[binIndex(scale, scaleFor(m).bins)]!);
       }
     }
   }
@@ -202,6 +204,7 @@ function buildArcs(s: YearSlice): Arc[] {
 
 function renderLegend(s: YearSlice, ramp: string[], flowRamp: string[], showFlows: boolean) {
   let title: string, colors: string[], labels: string[];
+  let extra = "";
   if (showFlows) {
     const nm = state.meta.countries[state.selected!]?.name ?? "";
     title = `Share of ${nm}'s ${state.direction}`;
@@ -209,12 +212,17 @@ function renderLegend(s: YearSlice, ramp: string[], flowRamp: string[], showFlow
     labels = binLabels(PARTNER_BINS);
   } else {
     const m = worldMetric();
-    const absolute = METRICS[m].mode === "absolute";
-    title = absolute
-      ? `${state.meta.commodities.find((c) => c.id === state.commodity)!.name} eaten per person, ${year()}`
+    const mode = METRICS[m].mode;
+    const nm = state.meta.commodities.find((c) => c.id === state.commodity)!.name;
+    title = mode === "absolute" ? `${nm} eaten per person, ${year()}`
+      : mode === "diverging" ? `Grown at home as a share of what is used, ${year()}`
       : `Share of world ${METRICS[m].noun}, ${year()}`;
     colors = ramp;
-    labels = absolute ? binLabels(PERCAP_BINS, " kg") : binLabels(WORLD_BINS);
+    const sc = scaleFor(m);
+    labels = binLabels(sc.bins, sc.unit);
+    if (mode === "diverging") {
+      extra = `<div class="legend-ends"><span>leans on imports</span><span>grows a surplus</span></div>`;
+    }
   }
   const arcNote = showFlows && ((s.c[state.selected!]?.[state.direction === "imports" ? "i" : "e"]?.length ?? 0) > MAX_ARCS)
     ? `<div style="margin-top:5px">Top ${MAX_ARCS} flows drawn; the panel lists them all.</div>` : "";
@@ -222,7 +230,7 @@ function renderLegend(s: YearSlice, ramp: string[], flowRamp: string[], showFlow
   el.legend.innerHTML = `<div class="legend-title">${title}</div>
     <div class="legend-scale">${colors.map((c) => `<i style="background:${c}"></i>`).join("")}</div>
     <div class="legend-ticks"><span>${labels[0]}</span><span>${labels[labels.length - 1]}+</span></div>
-    ${arcNote}`;
+    ${extra}${arcNote}`;
   el.legend.setAttribute("aria-hidden", "false");
 }
 
@@ -275,10 +283,11 @@ function showTooltip(id: string | null, x: number, y: number) {
       const m = worldMetric();
       const spec = METRICS[m];
       const denom = worldTotalFor(s.world, m);
-      const v = (r as any)[spec.key] as number | undefined;
-      detail = !v ? `no ${spec.noun} reported`
-        : spec.mode === "absolute"
-          ? `${v.toFixed(1)} kg per person per year`
+      const v = spec.value(r);
+      detail = v === undefined ? `no ${spec.noun} reported`
+        : spec.mode === "absolute" ? `${v.toFixed(1)} kg per person per year`
+        : spec.mode === "diverging"
+          ? `grows ${v.toFixed(0)}% of what it uses${v < 100 ? " — the rest is imported" : ""}`
           : `${tonnes(v)} &middot; ${pct(denom ? (v / denom) * 100 : NaN)} of world ${spec.noun}`;
     }
   }

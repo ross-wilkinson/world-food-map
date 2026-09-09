@@ -4,7 +4,8 @@ import { interpolateLab } from "d3-interpolate";
 export type Direction = "world" | "imports" | "exports";
 
 /** What the world view ranks and shades by. */
-export type WorldMetric = "production" | "exports" | "imports" | "food" | "percap";
+export type WorldMetric =
+  | "production" | "exports" | "imports" | "food" | "percap" | "reliance";
 
 /** Sentinel the build script uses for the folded-up long tail of small partners. */
 export const OTHER = "ZZZ";
@@ -136,20 +137,58 @@ export function binLabels(bins: number[], unit = "%"): string[] {
  */
 export const PERCAP_BINS = [5, 20, 50, 80, 120, 170];
 
+/**
+ * Self-sufficiency, production over domestic supply. Diverging around 100%, which
+ * is the meaningful midpoint: a country there grows exactly what it uses. Below it
+ * leans on imports; above it has a surplus. Equal step count per arm.
+ */
+export const RELIANCE_BINS = [25, 60, 90, 110, 175, 300];
+
 export const METRICS: Record<WorldMetric, {
-  key: "p" | "ex" | "im" | "f" | "fpc";
-  noun: string; rank: string; mode: "share" | "absolute";
+  noun: string; rank: string; mode: "share" | "absolute" | "diverging";
+  value(r: CountryYear): number | undefined;
+  /** rank ascending -- for reliance the interesting end is the bottom */
+  sort?: "asc";
+  /** ignore countries whose supply is too small for the ratio to mean anything */
+  minSupply?: number;
 }> = {
-  production: { key: "p",   noun: "production",  rank: "producers", mode: "share" },
-  exports:    { key: "ex",  noun: "exports",     rank: "exporters", mode: "share" },
-  imports:    { key: "im",  noun: "imports",     rank: "importers", mode: "share" },
-  food:       { key: "f",   noun: "food use",    rank: "consumers", mode: "share" },
-  percap:     { key: "fpc", noun: "eaten per person", rank: "eaters", mode: "absolute" },
+  production: { noun: "production", rank: "producers", mode: "share", value: (r) => r.p },
+  exports:    { noun: "exports",    rank: "exporters", mode: "share", value: (r) => r.ex },
+  imports:    { noun: "imports",    rank: "importers", mode: "share", value: (r) => r.im },
+  food:       { noun: "food use",   rank: "consumers", mode: "share", value: (r) => r.f },
+  percap:     { noun: "eaten per person", rank: "eaters", mode: "absolute", value: (r) => r.fpc },
+  reliance:   {
+    noun: "self-sufficiency", rank: "most import-reliant", mode: "diverging",
+    // absent production means none was grown, which is maximum reliance -- not
+    // missing data. Treating it as undefined would drop exactly the countries the
+    // map exists to show.
+    value: (r) => (r.ds ? ((r.p ?? 0) / r.ds) * 100 : undefined),
+    sort: "asc", minSupply: 50000,
+  },
 };
+
+/**
+ * Diverging ramp built out from the neutral midpoint to each pole, so the middle
+ * reads as "nothing notable" rather than as a hue of its own.
+ */
+export function divergingRamp(): string[] {
+  const mid = readVar("--div-mid") || "#f0efec";
+  const low = interpolateLab(mid, readVar("--div-low") || "#e34948");
+  const high = interpolateLab(mid, readVar("--div-high") || "#2a78d6");
+  return [low(1), low(0.66), low(0.33), mid, high(0.33), high(0.66), high(1)];
+}
 
 export function worldTotalFor(w: YearSlice["world"], m: WorldMetric): number {
   return m === "production" ? w.production : m === "exports" ? w.exports
     : m === "imports" ? w.imports : m === "food" ? w.food : w.foodPerCapita;
+}
+
+/** Bins and legend units for whichever scale a metric uses. */
+export function scaleFor(m: WorldMetric): { bins: number[]; unit: string } {
+  const mode = METRICS[m].mode;
+  return mode === "absolute" ? { bins: PERCAP_BINS, unit: " kg" }
+    : mode === "diverging" ? { bins: RELIANCE_BINS, unit: "%" }
+    : { bins: WORLD_BINS, unit: "%" };
 }
 
 /**

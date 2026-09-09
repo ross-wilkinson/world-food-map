@@ -13,6 +13,16 @@ globe can only ever show you one hemisphere.
 - **What share of the world's wheat comes from any one country?** The world view
   shades every country by its share of global production, exports or imports —
   who grows it, who sells it, who buys it.
+- **Who is exposed if supply fails?** *Reliance* shades every country by
+  self-sufficiency — production over domestic supply — diverging around 100%, the
+  point where a country grows exactly what it uses. The poles are the app's own
+  direction hues (blue for import-leaning, orange for surplus) rather than a
+  red/green judgement, because the two ends are different *kinds* of exposure, not
+  degrees of badness: below 100% you depend on other harvests and other
+  governments' export rules, above it on your own weather and export markets. The
+  import-leaning end is the harder one to escape, since growing capacity cannot be
+  added in a season — that asymmetry is stated in the panel rather than encoded as
+  alarm colour.
 - **Who actually eats it?** *Food use* counts only the part people eat, not the
   much larger flow going to animal feed — 88% of the world's maize never reaches a
   human plate. *Per person* switches to kg/person/year, which is shaded by its own
