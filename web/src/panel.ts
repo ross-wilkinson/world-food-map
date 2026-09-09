@@ -4,7 +4,7 @@ import {
 } from "./model";
 import type { CountryYear, Direction, Meta, YearSlice } from "./model";
 
-export type WorldMetric = "production" | "exports";
+export type WorldMetric = "production" | "exports" | "imports";
 
 export interface PanelState {
   meta: Meta;
@@ -43,19 +43,14 @@ function worldHtml(s: PanelState): string {
   const { slice, meta } = s;
   const needsPick = s.direction !== "world" && !s.selected;
   const metric: WorldMetric = needsPick
-    ? (s.direction === "exports" ? "exports" : "production")
+    ? (s.direction === "imports" ? "imports" : "exports")
     : s.worldMetric;
 
-  // Ranking the world by import volume only makes sense in the "pick a country"
-  // state; the world choropleth itself is always production or exports.
-  const rankBy: "production" | "exports" | "imports" =
-    needsPick && s.direction === "imports" ? "imports" : metric;
-
   const denom =
-    rankBy === "production" ? slice.world.production
-      : rankBy === "exports" ? slice.world.exports : slice.world.imports;
+    metric === "production" ? slice.world.production
+      : metric === "exports" ? slice.world.exports : slice.world.imports;
 
-  const key = rankBy === "production" ? "p" : rankBy === "exports" ? "ex" : "im";
+  const key = metric === "production" ? "p" : metric === "exports" ? "ex" : "im";
   const rows = Object.entries(slice.c)
     .map(([id, r]) => [id, (r as any)[key] as number | undefined] as const)
     .filter((kv): kv is readonly [string, number] => !!kv[1] && kv[1] > 0)
@@ -64,6 +59,7 @@ function worldHtml(s: PanelState): string {
 
   const traded = slice.world.production
     ? (slice.world.exports / slice.world.production) * 100 : NaN;
+  const ratio = slice.world.exports ? slice.world.imports / slice.world.exports : NaN;
 
   const head = needsPick
     ? `<h2>Pick a country</h2>
@@ -75,11 +71,18 @@ function worldHtml(s: PanelState): string {
        <div class="tiles">
          <div class="tile"><div class="tile-label">World production</div>
            <div class="tile-value">${tonnes(slice.world.production)}</div></div>
-         <div class="tile"><div class="tile-label">World exports</div>
-           <div class="tile-value">${tonnes(slice.world.exports)}</div></div>
+         <div class="tile"><div class="tile-label">World ${metric === "imports" ? "imports" : "exports"}</div>
+           <div class="tile-value">${tonnes(metric === "imports" ? slice.world.imports : slice.world.exports)}</div></div>
+         ${metric === "imports" ? `
+         <div class="tile wide"><div class="tile-label">World imports measured against world exports</div>
+           <div class="tile-value">${ratio.toFixed(2)}&times;</div>
+           <div class="tile-note">Every tonne shipped is imported once, so this should be 1&times;.
+             ${ratio > 1.03
+               ? "The excess is processed product counted again each time it crosses a border, which is why milling and re-export hubs rank high below."
+               : "It roughly is, so this crop moves as the raw commodity and the ranking below is close to real buyers."}</div></div>` : `
          <div class="tile wide"><div class="tile-label">Share of production that crosses a border</div>
            <div class="tile-value">${pct(traded)}</div>
-           <div class="tile-note">The rest is eaten, fed or processed at home.</div></div>
+           <div class="tile-note">The rest is eaten, fed or processed at home.</div></div>`}
        </div>
        <div class="ctl" style="margin-top:14px">
          <span class="ctl-label">Rank &amp; shade by</span>
@@ -88,10 +91,12 @@ function worldHtml(s: PanelState): string {
              class="${metric === "production" ? "on" : ""}">Production</button>
            <button type="button" role="radio" data-m="exports" aria-checked="${metric === "exports"}"
              class="${metric === "exports" ? "on" : ""}">Exports</button>
+           <button type="button" role="radio" data-m="imports" aria-checked="${metric === "imports"}"
+             class="${metric === "imports" ? "on" : ""}">Imports</button>
          </div>
        </div>`;
 
-  const label = rankBy === "production" ? "producers" : rankBy === "exports" ? "exporters" : "importers";
+  const label = metric === "production" ? "producers" : metric === "exports" ? "exporters" : "importers";
   // Bars are scaled to the leader, the way a bar chart's axis is; the label
   // carries the true share, which is rarely anywhere near 100%.
   const top = rows[0]?.[1] ?? 1;

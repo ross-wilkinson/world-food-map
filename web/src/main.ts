@@ -104,12 +104,12 @@ function dirColor(): string {
  * What the choropleth shades by. With no country picked yet, an Imports/Exports tab
  * shades the same measure the panel is ranking, so the map and the list agree.
  */
-function worldMetric(): "production" | "exports" | "imports" {
+function worldMetric(): WorldMetric {
   if (state.direction === "world" || state.selected) return state.worldMetric;
   return state.direction === "imports" ? "imports" : "exports";
 }
 
-function worldTotal(s: YearSlice, m: ReturnType<typeof worldMetric>): number {
+function worldTotal(s: YearSlice, m: WorldMetric): number {
   return m === "production" ? s.world.production : m === "exports" ? s.world.exports : s.world.imports;
 }
 

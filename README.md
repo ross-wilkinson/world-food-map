@@ -11,7 +11,8 @@ globe can only ever show you one hemisphere.
 ## What it answers
 
 - **What share of the world's wheat comes from any one country?** The world view
-  shades every country by its share of global production or exports.
+  shades every country by its share of global production, exports or imports —
+  who grows it, who sells it, who buys it.
 - **Where does a country's supply actually come from?** Ranked partners with
   percentages, drawn as arcs weighted by volume.
 - **How exposed is a country?** Imports as a share of domestic supply, exports as a
