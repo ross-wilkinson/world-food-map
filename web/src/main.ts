@@ -3,11 +3,13 @@ import { Globe } from "./globe";
 import type { Arc } from "./globe";
 import { renderPanel } from "./panel";
 import {
-  METRICS, OTHER, PARTNER_BINS, binIndex, binLabels, dirRamp,
-  divergingRamp, loadCommodity, loadMeta, loadTopology, mix, pct, readRamp,
-  readVar, scaleFor, tonnes, worldTotalFor,
+  METRICS, OTHER, PARTNER_BINS, QUADRANTS, RISK, binIndex, binLabels, dirRamp,
+  divergingRamp, loadCommodity, loadMeta, loadSecurity, loadTopology, mix, pct,
+  quadrantColors, quadrantOf, readRamp, readVar, scaleFor, tonnes, worldTotalFor,
 } from "./model";
-import type { CommodityData, Direction, Meta, WorldMetric, YearSlice } from "./model";
+import type {
+  CommodityData, Direction, Meta, Security, WorldMetric, YearSlice,
+} from "./model";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -38,6 +40,7 @@ const el = {
 
 const state = {
   meta: null as unknown as Meta,
+  security: null as unknown as Security,
   data: null as unknown as CommodityData,
   commodity: "wheat",
   yearIdx: 0,
@@ -55,8 +58,11 @@ let playTimer = 0;
 /* ------------------------------------------------------------------ bootstrap */
 
 async function init() {
-  const [meta, topo] = await Promise.all([loadMeta(), loadTopology()]);
+  const [meta, topo, security] = await Promise.all([
+    loadMeta(), loadTopology(), loadSecurity(),
+  ]);
   state.meta = meta;
+  state.security = security;
   state.yearIdx = meta.years.length - 1;
 
   el.commodity.innerHTML = meta.commodities
@@ -91,6 +97,10 @@ async function init() {
 
 const year = () => state.meta.years[state.yearIdx]!;
 const slice = (): YearSlice | undefined => state.data.years[String(year())];
+
+/** The two files are built from the same year list, but resolve by value rather
+ *  than trusting the indexes to stay aligned if one is ever rebuilt alone. */
+const secYearIdx = () => state.security.years.indexOf(year());
 
 function commoditySpec() {
   return state.meta.commodities.find((c) => c.id === state.commodity)!;
@@ -135,6 +145,7 @@ function update() {
     commodityPrimary: commoditySpec().primary,
     commodityNote: commoditySpec().note, year: year(), direction: state.direction,
     selected: state.selected, worldMetric: state.worldMetric, ramp: worldRamp, flowRamp,
+    security: state.security, secYearIdx: secYearIdx(),
   }, {
     onSelect: (id) => selectCountry(id, true),
     onHoverPartner: (id) => { state.hoverPartner = id; globe.setHighlight(id); },
@@ -159,7 +170,15 @@ function buildFill(s: YearSlice, ramp: string[], flowRamp: string[], showFlows: 
     const m = worldMetric();
     const spec = METRICS[m];
     const denom = worldTotalFor(s.world, m);
-    if (denom || spec.mode !== "share") {
+    if (spec.mode === "quadrant") {
+      // categorical: the colour is which cell the country is in, not how much
+      const colors = quadrantColors();
+      const yi = secYearIdx();
+      for (const [id, r] of Object.entries(s.c)) {
+        const q = quadrantOf(r, state.security, id, yi);
+        if (q) shades.set(id, colors[q]);
+      }
+    } else if (denom || spec.mode !== "share") {
       for (const [id, r] of Object.entries(s.c)) {
         const v = spec.value(r);
         if (v === undefined || (spec.mode === "diverging" ? v < 0 : v <= 0)) continue;
@@ -214,10 +233,22 @@ function renderLegend(s: YearSlice, ramp: string[], flowRamp: string[], showFlow
     const m = worldMetric();
     const mode = METRICS[m].mode;
     const nm = state.meta.commodities.find((c) => c.id === state.commodity)!.name;
-    title = mode === "absolute" ? `${nm} eaten per person, ${year()}`
+    title = mode === "quadrant" ? ""
+      : mode === "absolute" ? `${nm} eaten per person, ${year()}`
       : mode === "diverging" ? `Grown at home as a share of what is used, ${year()}`
       : `Share of world ${METRICS[m].noun}, ${year()}`;
     colors = ramp;
+    if (mode === "quadrant") {
+      // Colour to name only. The panel carries the two axes, the counts and the
+      // caveats, and does it better than a box in the corner of the map can.
+      const c = quadrantColors();
+      el.legend.innerHTML = `<div class="legend-title">${nm} exposure, ${year()}</div>
+        <ul class="legend-cats">${QUADRANTS.map((q) =>
+          `<li><i style="background:${c[q.key]}"></i><span>${q.label}</span></li>`).join("")}</ul>
+        <div style="margin-top:6px">The panel explains the two axes.</div>`;
+      el.legend.setAttribute("aria-hidden", "false");
+      return;
+    }
     const sc = scaleFor(m);
     labels = binLabels(sc.bins, sc.unit);
     if (mode === "diverging") {
@@ -284,6 +315,19 @@ function showTooltip(id: string | null, x: number, y: number) {
       const spec = METRICS[m];
       const denom = worldTotalFor(s.world, m);
       const v = spec.value(r);
+      if (spec.mode === "quadrant") {
+        const q = quadrantOf(r, state.security, id, secYearIdx());
+        const meta = QUADRANTS.find((x) => x.key === q);
+        detail = !meta || v === undefined
+          ? "not enough reported to place this country"
+          : `${v.toFixed(0)} kcal per person per day imported &middot; ${meta.label.toLowerCase()}`;
+        const rect0 = el.stage.getBoundingClientRect();
+        el.tooltip.innerHTML = `<b>${c.name}</b><br><span>${detail}</span>`;
+        el.tooltip.style.left = `${x - rect0.left}px`;
+        el.tooltip.style.top = `${y - rect0.top - 12}px`;
+        el.tooltip.classList.add("on");
+        return;
+      }
       detail = v === undefined ? `no ${spec.noun} reported`
         : spec.mode === "absolute" ? `${v.toFixed(1)} kg per person per year`
         : spec.mode === "diverging"
@@ -409,6 +453,39 @@ function fillMethod() {
     Those cover the crop <i>and its products</i> in primary equivalent, while the trade
     matrix rows are the raw commodity, so the two totals will not match to the tonne.
     They are kept in separate parts of the panel rather than blended.</p>
+    <h3>The exposure view</h3>
+    <p>This one adds a third FAOSTAT source, the <b>Food Security Indicators</b>, and
+    places each country on two axes rather than scoring it. Across: the calories of the
+    chosen crop that come from abroad, per person per day. Down: whether a price shock
+    could be absorbed.</p>
+    <p>Calories, not tonnes, because the same 100% imported is 61 kcal of Sierra Leone's
+    day in wheat and 865 of Djibouti's &mdash; and because 46 countries import every
+    tonne of their wheat, so a share alone puts Iceland and Haiti in the same place.</p>
+    <p>The ${RISK.kcal} kcal line across is <b>our choice, not a published threshold</b>
+    &mdash; roughly a tenth of a day's food. The capacity rule is two tests, either of
+    which is enough to fail: a food import bill of ${RISK.bill}% or more of merchandise
+    exports on GDP per head at or under $${RISK.gdp.toLocaleString()}, or a
+    consumption-inequality coefficient at or above ${RISK.access}. Those cuts were
+    chosen against undernourishment, which is deliberately <b>never an input</b> to
+    where a country lands, so the placement can be checked against it rather than
+    assumed to agree.</p>
+    <ul>
+      <li><b>Exposure is not hunger.</b> Tunisia is the most wheat-exposed country on
+      the map and has 3% undernourishment. The view asks what a shock would do, not
+      what is happening now.</li>
+      <li><b>National figures cannot see inside a country.</b> Gabon runs a small food
+      import bill on high GDP per head and still has 20% undernourishment. The
+      inequality term catches much of that, but Bolivia, Congo, Mozambique, Papua New
+      Guinea and Zimbabwe are all placed as better off than their hunger figures
+      suggest.</li>
+      <li><b>The food import bill's denominator is merchandise exports only</b>, so
+      tourism and remittance economies look far worse on it than they are. That is why
+      GDP per head guards it rather than standing beside it.</li>
+      <li><b>Feed and oil crops read as low exposure</b> because little of them is eaten
+      directly. A country whose livestock depend on imported soy or maize has a real
+      exposure this view cannot show.</li>
+    </ul>
+
     <h3>Things to keep in mind</h3>
     <ul>
       <li><b>Importer and exporter reports disagree.</b> The same shipment is often

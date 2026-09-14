@@ -17,6 +17,14 @@ const SOURCES = [
     name: "fbs.zip",
     url: "https://bulks-faostat.fao.org/production/FoodBalanceSheets_E_All_Data_(Normalized).zip",
   },
+  {
+    // Tiny next to the other two. Carries the indicators FAO publishes and we
+    // cannot derive: what a country's food import bill costs it, and what it
+    // earns -- the difference between a country that imports everything and can
+    // pay, and one that imports everything and cannot.
+    name: "food_security.zip",
+    url: "https://bulks-faostat.fao.org/production/Food_Security_Data_E_All_Data_(Normalized).zip",
+  },
 ];
 
 mkdirSync("data/raw", { recursive: true });

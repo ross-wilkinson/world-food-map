@@ -5,7 +5,14 @@ export type Direction = "world" | "imports" | "exports";
 
 /** What the world view ranks and shades by. */
 export type WorldMetric =
-  | "production" | "exports" | "imports" | "food" | "percap" | "reliance";
+  | "production" | "exports" | "imports" | "food" | "percap" | "reliance" | "risk";
+
+/**
+ * Where a country sits on the two axes of the exposure view. A type, not a score:
+ * the four cells are different situations rather than four rungs of one ladder,
+ * which is why nothing here adds up to a number out of a hundred.
+ */
+export type Quadrant = "risk" | "able" | "strain" | "clear";
 
 /** Sentinel the build script uses for the folded-up long tail of small partners. */
 export const OTHER = "ZZZ";
@@ -16,6 +23,17 @@ export interface CountryMeta {
   lat: number;
   /** false when the country trades but has no polygon in the 110m basemap. */
   onMap: boolean;
+}
+
+/** Country-level indicators from FAOSTAT's Food Security release. */
+export interface Security {
+  generated: string;
+  years: number[];
+  /** how many years a value may be carried forward before the build gives up */
+  maxCarry: number;
+  indicators: Record<string, { name: string; unit: string; note?: string; heldOut?: boolean }>;
+  /** m49 -> indicator -> one slot per year in `years`, null where unpublished */
+  c: Record<string, Record<string, (number | null)[]>>;
 }
 
 export interface Meta {
@@ -34,6 +52,7 @@ export interface CountryYear {
   f?: number;   // food use -- the part actually eaten by people (FBS)
   fd?: number;  // feed
   fpc?: number; // food supply, kg per person per year (FBS)
+  kc?: number;  // dietary energy from this crop, kcal per person per day (FBS)
   i?: [string, number][];  // bilateral import sources
   iT?: number;             // their total
   iM?: 1;                  // sources were mirrored from partners' export reports
@@ -74,6 +93,12 @@ export function loadCommodity(id: string): Promise<CommodityData> {
     cache.set(id, p);
   }
   return p;
+}
+
+export async function loadSecurity(): Promise<Security> {
+  const r = await fetch(`${BASE}data/security.json`);
+  if (!r.ok) throw new Error(`security.json: ${r.status}`);
+  return r.json();
 }
 
 export async function loadTopology(): Promise<any> {
@@ -144,8 +169,113 @@ export const PERCAP_BINS = [5, 20, 50, 80, 120, 170];
  */
 export const RELIANCE_BINS = [25, 60, 90, 110, 175, 300];
 
+
+/* ------------------------------------------------------------------ exposure */
+
+/**
+ * The cuts that place a country in a quadrant.
+ *
+ * `kcal` is an editorial choice and is labelled as one in the app: a tenth of a
+ * 2,000 kcal reference day, coming from abroad, in this one crop. There is no
+ * published threshold for it, and pretending otherwise would be the invented
+ * precision this project spends the rest of its footnotes avoiding.
+ *
+ * The capacity cuts are not arbitrary in the same way -- they were chosen against
+ * held-out undernourishment, which is never an input to the placement itself.
+ */
+export const RISK = {
+  kcal: 200,      // imported kcal/person/day from this crop
+  bill: 25,       // food import bill, % of merchandise exports
+  gdp: 12000,     // GDP per capita, PPP constant 2021 int$
+  access: 0.30,   // CV of habitual caloric consumption
+};
+
+/** Read one indicator for one country in one year. */
+export function secVal(
+  sec: Security, id: string, key: string, yearIdx: number,
+): number | undefined {
+  const v = sec.c[id]?.[key]?.[yearIdx];
+  return v === null || v === undefined ? undefined : v;
+}
+
+/**
+ * Calories per person per day of this crop that come from abroad.
+ *
+ * The share-not-grown-at-home on its own cannot carry the x axis: 46 countries
+ * import every tonne of their wheat and so all sit at exactly 100%, which puts
+ * Iceland and Haiti in the same place. Weighting by dietary energy separates
+ * them, because the same 100% is 61 kcal of Sierra Leone's day and 865 of
+ * Djibouti's.
+ */
+export function importedKcal(r: CountryYear): number | undefined {
+  if (r.kc === undefined || !r.ds) return undefined;
+  return r.kc * (1 - Math.min(1, (r.p ?? 0) / r.ds));
+}
+
+/**
+ * Whether a country could absorb a price shock -- undefined where we cannot say.
+ *
+ * Two separate ways to fail, and either is enough, so this is a disjunction
+ * rather than a blend. A country may be unable to pay the bill, or able to pay it
+ * while the food still fails to reach people: Gabon runs a 7% food import bill on
+ * $18,700 a head and has 20% undernourishment. National earnings cannot see
+ * inside a country, so the access gap is the only term here that does.
+ *
+ * GDP guards the bill rather than standing alongside it, because the bill's
+ * denominator is merchandise exports only -- Macao's food bill is 127% of its
+ * merchandise exports on the highest GDP per head in the data.
+ */
+export function canAbsorb(
+  sec: Security, id: string, yearIdx: number,
+): boolean | undefined {
+  const bill = secVal(sec, id, "bill", yearIdx);
+  const gdp = secVal(sec, id, "gdp", yearIdx);
+  const access = secVal(sec, id, "accessgap", yearIdx);
+  if (bill === undefined && access === undefined) return undefined;
+  const cannotAfford = bill !== undefined && bill >= RISK.bill
+    && (gdp === undefined || gdp <= RISK.gdp);
+  const cannotReach = access !== undefined && access >= RISK.access;
+  return !(cannotAfford || cannotReach);
+}
+
+export function quadrantOf(
+  r: CountryYear, sec: Security, id: string, yearIdx: number,
+): Quadrant | undefined {
+  const imported = importedKcal(r);
+  const absorb = canAbsorb(sec, id, yearIdx);
+  if (imported === undefined || absorb === undefined) return undefined;
+  const exposed = imported >= RISK.kcal;
+  return exposed ? (absorb ? "able" : "risk") : (absorb ? "clear" : "strain");
+}
+
+/**
+ * Order matters: this is the order the legend grid and the panel groups use, and
+ * it reads as a sentence -- the crop is a risk here, it is a risk they can cover,
+ * the strain is domestic, there is no real exposure.
+ *
+ * Labels are kept short enough to sit on one line inside a legend cell. They are
+ * the same string in the legend and the panel on purpose: two wordings for one
+ * category is how a reader ends up thinking there are more than four.
+ */
+export const QUADRANTS: { key: Quadrant; label: string; blurb: string; token: string }[] = [
+  { key: "risk", token: "--q-risk", label: "Most exposed",
+    blurb: "Much of this crop's calories are imported, and a price shock would be hard to absorb." },
+  { key: "able", token: "--q-able", label: "Exposed, can pay",
+    blurb: "Just as import-reliant, but able to pay through a shortage." },
+  { key: "strain", token: "--q-strain", label: "Strained at home",
+    blurb: "Grows most of what it uses, but food does not reach everyone. Trade is not the weak point." },
+  { key: "clear", token: "--q-clear", label: "Little exposure",
+    blurb: "Little of this crop's calories cross a border. Another crop may tell a different story." },
+];
+
+export function quadrantColors(): Record<Quadrant, string> {
+  return Object.fromEntries(
+    QUADRANTS.map((q) => [q.key, readVar(q.token)]),
+  ) as Record<Quadrant, string>;
+}
+
 export const METRICS: Record<WorldMetric, {
-  noun: string; rank: string; mode: "share" | "absolute" | "diverging";
+  noun: string; rank: string; mode: "share" | "absolute" | "diverging" | "quadrant";
   value(r: CountryYear): number | undefined;
   /** rank ascending -- for reliance the interesting end is the bottom */
   sort?: "asc";
@@ -164,6 +294,18 @@ export const METRICS: Record<WorldMetric, {
     // map exists to show.
     value: (r) => (r.ds ? ((r.p ?? 0) / r.ds) * 100 : undefined),
     sort: "asc", minSupply: 50000,
+  },
+  // Ranked by the x axis alone; the quadrant is the y axis and is carried as a
+  // colour rather than a position in the list.
+  // No tonnage floor here, unlike reliance. That floor guards a ratio against a
+  // tiny denominator; both axes of this view are already per person, and the
+  // share-not-grown-at-home is clamped to 1. Applying it anyway dropped 44
+  // countries from the rice map -- Kiribati on 642 imported kcal a day, Tuvalu on
+  // 560 -- which are small island states, not noise, and are the clearest cases
+  // of a food system living on imported staples that this view has.
+  risk: {
+    noun: "imported calories", rank: "most exposed", mode: "quadrant",
+    value: importedKcal,
   },
 };
 

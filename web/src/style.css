@@ -25,6 +25,12 @@
      blue already reads as "coming in", orange as "going out" -- so the scale shows
      which way a country leans, not which end is better. Grey at 100%. */
   --div-low: #2a78d6; --div-mid: #f0efec; --div-high: #eb6834;
+  /* The four cells of the exposure view. Categorical, not a ramp: they are four
+     situations, not four rungs. Only one is coloured as alarm -- unlike reliance,
+     where both ends were different kinds of exposure, here one cell really is the
+     worse place to be. --q-clear is warm where --land is cool, so "no exposure"
+     stays distinguishable from "no data" at a glance. */
+  --q-risk: #a8342a; --q-able: #3d7fc1; --q-strain: #d29a35; --q-clear: #e4e0d2;
   --shadow: 0 1px 2px rgba(11,11,11,.06), 0 8px 24px rgba(11,11,11,.08);
 }
 @media (prefers-color-scheme: dark) {
@@ -49,6 +55,7 @@
     /* a touch lighter than --land so even the lowest step outranks a no-data country */
     --ramp-floor: #333840;
     --div-low: #3987e5; --div-mid: #383835; --div-high: #d95926;
+    --q-risk: #c4483a; --q-able: #3987e5; --q-strain: #d29a35; --q-clear: #4a443b;
     --shadow: 0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.45);
   }
 }
@@ -71,6 +78,7 @@
   --seq-5: #6da7ec; --seq-6: #9ec5f4; --seq-7: #cde2fb;
   --ramp-floor: #333840;
   --div-low: #3987e5; --div-mid: #383835; --div-high: #d95926;
+  --q-risk: #c4483a; --q-able: #3987e5; --q-strain: #d29a35; --q-clear: #4a443b;
   --shadow: 0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.45);
 }
 
@@ -197,6 +205,79 @@ input[type="range"] { flex: 1; accent-color: var(--imports); min-width: 120px; }
   margin-top: 4px; font-size: 10px; color: var(--ink-muted);
 }
 .legend-ticks { display: flex; justify-content: space-between; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+/* Key for the exposure view. Colour to name, and nothing else.
+
+   It used to carry the axes and a two-sentence gloss as well, which made it wider
+   than the map could spare and still worse at explaining than the panel sitting
+   next to it. The panel owns the axes, the counts and the caveats; this only has
+   to answer "what is that colour", which is the one question you have while your
+   eyes are on the map. Order matches the panel's. */
+.legend-cats {
+  list-style: none; margin: 5px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.legend-cats li {
+  display: grid; grid-template-columns: 9px 1fr; gap: 6px; align-items: center;
+  font-size: 11px; line-height: 1.25; color: var(--ink);
+}
+.legend-cats i { width: 9px; height: 9px; border-radius: 2px; }
+/* The pale end would otherwise vanish into the legend. Drawn outside the box, not
+   inset: on a 9px swatch an inset ring covers about a third of the fill, which
+   lightened the dark swatches enough to misreport the colour they stand for. */
+.legend-cats i {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+/* ---------- exposure panel ---------- */
+
+/* The 2x2, drawn. The panel described a typology in words -- "two axes, not a
+   score" -- but never showed the shape, so nothing on screen said that the four
+   categories are two crossed axes rather than four loose buckets. Reading order
+   is the quadrant's own: exposure rightwards, room to absorb it downwards. */
+.quad-matrix {
+  display: grid; grid-template-columns: auto 1fr 1fr; gap: 5px 6px;
+  margin: 14px 0 8px;
+}
+.qm-x {
+  grid-column: 2 / -1; display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--ink-muted);
+}
+.qm-y {
+  display: flex; align-items: center; justify-content: flex-end; text-align: right;
+  font-size: 10px; line-height: 1.15; color: var(--ink-muted); white-space: nowrap;
+}
+.qm-cell {
+  border-radius: 7px; padding: 8px 9px;
+  background: color-mix(in srgb, var(--c) 15%, var(--plane));
+  /* neutral edge first, accent second: the pale cell's own colour is too close to
+     the panel to bound it, and it has to stay pale, because that is what those
+     countries look like on the map */
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--c);
+}
+.qm-cell b {
+  display: block; font-size: 18px; font-weight: 640; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.qm-cell .lab { display: block; font-size: 11px; font-weight: 620; margin-top: -1px; }
+.qm-cell .blurb {
+  display: block; font-size: 10px; line-height: 1.35; color: var(--ink-2); margin-top: 3px;
+}
+.qm-note { font-size: 11px; color: var(--ink-muted); margin: 0 0 2px; line-height: 1.45; }
+
+/* the group heading inside the ranked list, so the four types stay legible
+   as you read down a single ordering by imported calories */
+.rank li.head {
+  cursor: default; background: none; padding: 9px 0 2px;
+  grid-template-columns: 10px 1fr; align-items: center; gap: 7px;
+}
+.rank li.head:hover { background: none; }
+.rank li.head .sw { width: 10px; height: 10px; border-radius: 3px; }
+.rank li.head .lab {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-2);
+}
 
 .tooltip {
   position: absolute; pointer-events: none; opacity: 0; transform: translate(-50%, -100%);

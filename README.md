@@ -23,6 +23,15 @@ globe can only ever show you one hemisphere.
   import-leaning end is the harder one to escape, since growing capacity cannot be
   added in a season — that asymmetry is stated in the panel rather than encoded as
   alarm colour.
+- **Who would a shock actually hurt?** *Exposure* places every country on two axes
+  instead of scoring it. Across: the calories of the crop that come from abroad, per
+  person per day. Down: whether a price shock could be absorbed. Calories rather than
+  tonnes, because 46 countries import every tonne of their wheat and so all sit at
+  100% on a share — the same 100% is 61 kcal of Sierra Leone's day and 865 of
+  Djibouti's. Qatar and Yemen are both near-total cereal importers; Qatar's food
+  import bill is 3% of its merchandise exports and Yemen's is 508%, and only the
+  second axis can tell them apart. The result is a **type, not a score**: nothing
+  here adds up to a number out of a hundred.
 - **Who actually eats it?** *Food use* counts only the part people eat, not the
   much larger flow going to animal feed — 88% of the world's maize never reaches a
   human plate. *Per person* switches to kg/person/year, which is shaded by its own
@@ -41,6 +50,7 @@ Everything comes from FAOSTAT, and two different datasets are on screen:
 |---|---|---|
 | Arcs, ranked partners, percentages | [Detailed Trade Matrix](https://www.fao.org/faostat/en/#data/TM) | The only source with country-to-country flows |
 | Production, domestic supply, ratios | [Food Balance Sheets](https://www.fao.org/faostat/en/#data/FBS) | Production and consumption, which the trade matrix does not carry |
+| The exposure view's second axis | [Food Security Indicators](https://www.fao.org/faostat/en/#data/FS) | What a food bill costs against what a country earns, and whether food reaches everyone — neither is derivable from crop data |
 
 They are kept in separate parts of the panel rather than blended. FBS items cover
 the crop *and its products* in primary equivalent, while the trade matrix rows are
@@ -66,6 +76,23 @@ them would invent precision that isn't there.
   the aggregate cannot be built faithfully.
 - **Some traders have no polygon** at 110m resolution (Singapore, Hong Kong, Malta,
   small island states). They get arc endpoints and a "not on map" flag in the list.
+- **Exposure is not hunger.** Tunisia is the most wheat-exposed country on the map
+  and has 3% undernourishment. The view asks what a shock would do, not what is
+  happening now. Undernourishment is carried in the data deliberately as a *held-out*
+  check on the placement and is never an input to it.
+- **National figures cannot see inside a country.** Gabon runs a 7% food import bill
+  on $18,700 GDP per head and still has 20% undernourishment, because oil revenue does
+  not reach the plate. FAO's consumption-inequality coefficient is the only term here
+  that sees distribution, and it catches most but not all of this: Bolivia, Congo,
+  Mozambique, Papua New Guinea and Zimbabwe are still placed better off than their
+  hunger figures suggest.
+- **Feed and oil crops read as low exposure.** Only 4% of the world's soybeans and 8%
+  of its barley are eaten directly, so weighting by calories on a plate shows almost
+  no one as exposed — even where livestock or cooking oil depend on imports. The app
+  says so on those crops rather than showing an empty list.
+- **The 200 kcal/day line is an editorial choice**, roughly a tenth of a day's food,
+  and is labelled as one. The capacity cuts are not arbitrary in the same way: they
+  were chosen against held-out undernourishment.
 - **The basemap merges territories FAOSTAT reports separately.** Natural Earth draws
   French Guiana as a polygon of "France", which would hit-test and shade a chunk of
   South America with metropolitan France's balance. `scripts/basemap.mjs` splits it

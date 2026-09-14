@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "data:download": "node scripts/download.mjs",
-    "data:build": "python scripts/extract_trade.py && python scripts/extract_fbs.py && node scripts/basemap.mjs && node scripts/centroids.mjs && python scripts/build.py",
+    "data:build": "python scripts/extract_trade.py && python scripts/extract_fbs.py && python scripts/extract_security.py && node scripts/basemap.mjs && node scripts/centroids.mjs && python scripts/build.py",
     "check:shots": "node scripts/review.mjs",
     "check:interactions": "node scripts/interactions.mjs"
   },

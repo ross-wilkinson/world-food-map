@@ -1,8 +1,11 @@
 /** Side panel: stat tiles plus the ranked partner list that carries the percentages. */
 import {
-  METRICS, OTHER, PARTNER_BINS, binIndex, pct, scaleFor, tonnes, worldTotalFor,
+  METRICS, OTHER, PARTNER_BINS, QUADRANTS, RISK, binIndex, importedKcal, pct,
+  quadrantColors, quadrantOf, scaleFor, tonnes, worldTotalFor,
 } from "./model";
-import type { CountryYear, Direction, Meta, WorldMetric, YearSlice } from "./model";
+import type {
+  CountryYear, Direction, Meta, Quadrant, Security, WorldMetric, YearSlice,
+} from "./model";
 
 export type { WorldMetric };
 
@@ -18,6 +21,8 @@ export interface PanelState {
   worldMetric: WorldMetric;
   ramp: string[];
   flowRamp: string[];
+  security: Security;
+  secYearIdx: number;
 }
 
 export interface PanelHandlers {
@@ -49,6 +54,9 @@ function worldHtml(s: PanelState): string {
   const spec = METRICS[metric];
   const denom = worldTotalFor(slice.world, metric);
   const absolute = spec.mode === "absolute";
+  const quad = spec.mode === "quadrant";
+  const placed = quad ? placeAll(s) : [];
+  const atRisk = placed.filter((p) => p.q === "risk").length;
 
   const rows = Object.entries(slice.c)
     .filter(([, r]) => !spec.minSupply || (r.ds ?? 0) >= spec.minSupply)
@@ -78,7 +86,10 @@ function worldHtml(s: PanelState): string {
        <div class="tiles">
          <div class="tile"><div class="tile-label">World production</div>
            <div class="tile-value">${tonnes(slice.world.production)}</div></div>
-         ${metric === "reliance"
+         ${metric === "risk"
+           ? `<div class="tile"><div class="tile-label">Exposed and least able to absorb it</div>
+              <div class="tile-value">${atRisk}<span style="font-size:13px;font-weight:400"> of ${placed.length}</span></div></div>`
+           : metric === "reliance"
            ? `<div class="tile"><div class="tile-label">Grow under half what they use</div>
               <div class="tile-value">${leaning}<span style="font-size:13px;font-weight:400"> of ${rated.length}</span></div></div>`
            : metric === "percap"
@@ -89,7 +100,14 @@ function worldHtml(s: PanelState): string {
               <div class="tile-value">${tonnes(slice.world.food)}</div></div>`
            : `<div class="tile"><div class="tile-label">World ${metric === "imports" ? "imports" : "exports"}</div>
               <div class="tile-value">${tonnes(metric === "imports" ? slice.world.imports : slice.world.exports)}</div></div>`}
-         ${metric === "reliance" ? `
+         ${metric === "risk" ? `
+         <div class="tile wide"><div class="tile-label">Two axes, not a score</div>
+           <div class="tile-value" style="font-size:13px;font-weight:500;letter-spacing:0">Exposure &times; room to absorb it</div>
+           <div class="tile-note">The ${RISK.kcal} kcal line is <b>our choice</b>, not a
+             published threshold &mdash; roughly a tenth of a day's food. The capacity cuts
+             were chosen against undernourishment, which is deliberately never an input to
+             where a country lands. This maps exposure to a shock, not hunger today.</div></div>`
+           : metric === "reliance" ? `
          <div class="tile wide"><div class="tile-label">100% means a country grows exactly what it uses</div>
            <div class="tile-value" style="font-size:13px;font-weight:500;letter-spacing:0">Two different exposures</div>
            <div class="tile-note">Below 100% a country depends on other harvests and other
@@ -128,6 +146,8 @@ function worldHtml(s: PanelState): string {
              class="${metric === "percap" ? "on" : ""}">Per person</button>
            <button type="button" role="radio" data-m="reliance" aria-checked="${metric === "reliance"}"
              class="${metric === "reliance" ? "on" : ""}">Reliance</button>
+           <button type="button" role="radio" data-m="risk" aria-checked="${metric === "risk"}"
+             class="${metric === "risk" ? "on" : ""}">Exposure</button>
          </div>
        </div>`;
 
@@ -149,6 +169,26 @@ function worldHtml(s: PanelState): string {
     return row(id, nameOf(meta, id), value, title, c, bar, meta);
   }).join("");
 
+  if (quad) {
+    return `${head}
+      ${quadrantMatrix(placed)}
+      <div class="rank-head">
+        <h3>Ranked by imported calories, ${s.year}</h3>
+        <span class="total">kcal/person/day</span>
+      </div>
+      <ol class="rank">${quadrantList(s, placed)
+        || `<li class="other">No country can be placed for this year.</li>`}</ol>
+      ${eatenShare < 40 ? `<p class="note"><b>Only ${pct(eatenShare)} of the world's
+        ${esc(s.commodityName.toLowerCase())} is eaten directly by people.</b> This view
+        weighs a crop by the calories it puts on a plate, so a feed and oil crop shows
+        little exposure almost everywhere &mdash; even in countries whose livestock or
+        cooking oil depend on importing it. That indirect exposure is real and nothing
+        here can see it.</p>` : ""}
+      <p class="note">A country is placed only where FAO publishes both the trade
+        balance and the affordability figures, so ${placed.length} of
+        ${Object.keys(slice.c).length} appear here. ${esc(s.commodityNote)}</p>`;
+  }
+
   return `${head}
     <div class="rank-head">
       <h3>${spec.mode === "diverging" ? "" : "Top "}${spec.rank}, ${s.year}</h3>
@@ -157,6 +197,75 @@ function worldHtml(s: PanelState): string {
     </div>
     <ol class="rank">${items || `<li class="other">No data for this year.</li>`}</ol>
     <p class="note">${esc(s.commodityNote)}</p>`;
+}
+
+
+/* ---------------------------------------------------------------- exposure */
+
+interface Placed { id: string; kcal: number; q: Quadrant }
+
+function placeAll(s: PanelState): Placed[] {
+  const out: Placed[] = [];
+  for (const [id, r] of Object.entries(s.slice.c)) {
+    const q = quadrantOf(r, s.security, id, s.secYearIdx);
+    const kcal = importedKcal(r);
+    if (q && kcal !== undefined) out.push({ id, kcal, q });
+  }
+  return out.sort((a, b) => b.kcal - a.kcal);
+}
+
+/**
+ * How many rows each cell gets. The exposed-and-stretched cell is the one the
+ * view exists to show, so it gets the room; the others are there to prove it is
+ * a quadrant and not a ranking wearing four colours.
+ */
+const GROUP_ROWS: Record<Quadrant, number> = { risk: 12, able: 6, strain: 6, clear: 4 };
+
+function quadrantList(s: PanelState, placed: Placed[]): string {
+  const colors = quadrantColors();
+  const out: string[] = [];
+  for (const q of QUADRANTS) {
+    const mine = placed.filter((p) => p.q === q.key);
+    if (!mine.length) continue;
+    const top = mine[0]!.kcal || 1;
+    out.push(`<li class="head"><span class="sw" style="background:${colors[q.key]}"></span>
+      <span class="lab">${esc(q.label)} &middot; ${mine.length}</span></li>`);
+    for (const p of mine.slice(0, GROUP_ROWS[q.key])) {
+      out.push(row(p.id, nameOf(s.meta, p.id), `${p.kcal.toFixed(0)}`,
+        `${p.kcal.toFixed(0)} kcal per person per day imported`,
+        colors[q.key], (p.kcal / top) * 100, s.meta));
+    }
+    const rest = mine.length - GROUP_ROWS[q.key];
+    if (rest > 0) {
+      out.push(`<li class="other"><span class="nm">and ${rest} more</span></li>`);
+    }
+  }
+  return out.join("");
+}
+
+/**
+ * The quadrant, drawn. Counts and names live in the cells rather than in a list
+ * beside it, so the shape carries them and nothing is said twice.
+ */
+function quadrantMatrix(placed: Placed[]): string {
+  const colors = quadrantColors();
+  const cell = (key: Quadrant) => {
+    const q = QUADRANTS.find((x) => x.key === key)!;
+    const n = placed.filter((p) => p.q === key).length;
+    return `<div class="qm-cell" style="--c:${colors[key]}">
+      <b>${n}</b><span class="lab">${esc(q.label)}</span>
+      <span class="blurb">${esc(q.blurb)}</span></div>`;
+  };
+  return `<div class="quad-matrix">
+      <div></div>
+      <div class="qm-x"><span>little imported</span><span>much</span></div>
+      <div class="qm-y">can pay</div>${cell("clear")}${cell("able")}
+      <div class="qm-y">cannot</div>${cell("strain")}${cell("risk")}
+    </div>
+    <p class="qm-note">Columns divide at ${RISK.kcal} kcal a person a day. Rows divide
+      on whether a price shock could be absorbed &mdash; failed either by a food import
+      bill that outruns what a country earns, or by food that already does not reach
+      everyone.</p>`;
 }
 
 /* ---------------------------------------------------------------- country view */

@@ -5,6 +5,7 @@ measurement:
 
   * bilateral shares  <- Detailed Trade Matrix, one primary item per commodity
   * production / supply ratios <- Food Balance Sheets, "<crop> and products"
+  * affordability / outcomes   <- Food Security Indicators, country-level only
 
 FBS aggregates cover processed derivatives in primary equivalent while the trade
 matrix rows are the raw commodity, so the two will not reconcile to the tonne.
@@ -15,6 +16,7 @@ import csv, json, collections, datetime, os
 CENTROIDS = "data/interim/centroids.json"
 TRADE = "data/interim/trade_candidates.csv"
 FBS = "data/interim/fbs.csv"
+SECURITY = "data/interim/security.csv"
 OUT_DIR = "web/public/data"
 
 # One trade-matrix item per commodity. Rice uses item 30, FAO's milled-equivalent
@@ -126,18 +128,26 @@ def main():
     # fbs[commodity][year][m49][element] = tonnes
     fbs = collections.defaultdict(lambda: collections.defaultdict(dict))
     world_fbs = collections.defaultdict(lambda: collections.defaultdict(dict))
+    population = {}
     fbs_years = set()
     for r in csv.DictReader(open(FBS, encoding="utf-8")):
         m = norm(r["m49"])
         year, com, el = int(r["year"]), r["commodity"], r["element"]
         val = float(r["value_t"])
         if m == WORLD:
-            world_fbs[com][year][el] = val
-            fbs_years.add(year)
+            if com == "population":
+                population.setdefault(WORLD, {})[year] = val
+            else:
+                world_fbs[com][year][el] = val
+                fbs_years.add(year)
             continue
         if m in AGGREGATES:
             continue
         names.setdefault(m, RENAME.get(r["area"], r["area"]))
+        if com == "population":
+            # not a crop; it rides in on the same file as the country denominator
+            population.setdefault(m, {})[year] = val
+            continue
         fbs[com][year].setdefault(m, {})[el] = val
         fbs_years.add(year)
 
@@ -202,6 +212,8 @@ def main():
               separators=(",", ":"), ensure_ascii=False)
     print(f"meta.json: {len(countries)} countries, {len(years)} years")
 
+    write_security(years, countries, population)
+
 
 def write_commodity(spec, years, direct, fbs, world_fbs, coords, names):
     com = spec["id"]
@@ -239,6 +251,11 @@ def write_commodity(spec, years, direct, fbs, world_fbs, coords, names):
             v = bal.get("food_per_capita")
             if v:
                 rec["fpc"] = round(v, 1)
+            # dietary energy from this crop. The comparable-across-crops weight:
+            # 100 kg of barley and 100 kg of wheat are not the same amount of food.
+            v = bal.get("kcal_per_capita")
+            if v:
+                rec["kc"] = round(v, 1)
 
             # A country's own customs report is the better source for its own
             # flows; only fall back to what its partners reported if it is silent.
@@ -299,6 +316,97 @@ def prune(flows, coords):
     if tail > 0.5:
         kept.append([OTHER, round(tail)])
     return kept, total
+
+
+# Short key -> how the app should label and treat each indicator. `heldOut` marks
+# the outcome variable: it is published so the exposure view can be checked
+# against real hunger, and must never be an input to a placement or a score.
+INDICATOR_META = {
+    "bill": {"name": "Food import bill", "unit": "% of merchandise exports",
+             "note": "Denominator is merchandise exports only, so tourism and "
+                     "remittance economies read far worse than they are."},
+    "gdp": {"name": "GDP per capita", "unit": "PPP, constant 2021 int'l $",
+            "note": "Carried as the guard on the food import bill, whose "
+                    "denominator fails for service economies."},
+    "accessgap": {"name": "Inequality of food access", "unit": "CV of consumption",
+                  "note": "The only indicator here that sees inside a country. "
+                          "National earnings cannot: Gabon runs a small food bill "
+                          "on high GDP per head and still has 20% undernourishment."},
+    "cerealdep": {"name": "Cereal import dependency", "unit": "%",
+                  "note": "FAO's own figure, kept as a cross-check on the "
+                          "per-crop reliance this app computes from FBS."},
+    "kcalvar": {"name": "Food supply variability", "unit": "kcal/cap/day"},
+    "irrigation": {"name": "Arable land equipped for irrigation", "unit": "%"},
+    "cerealshare": {"name": "Dietary energy from cereals, roots and tubers", "unit": "%"},
+    "adequacy": {"name": "Dietary energy supply adequacy", "unit": "%"},
+    "undernourished": {"name": "Prevalence of undernourishment", "unit": "%",
+                       "heldOut": True,
+                       "note": "Outcome only. Never an input to placement."},
+    "pop": {"name": "Population", "unit": "people"},
+}
+
+# Three-year averages and annual series both land on a single year, and some
+# indicators simply stop early. Rather than interpolate -- which would draw a
+# country at a position FAO never published -- a value is carried forward at most
+# this many years, and anything older is left null.
+MAX_CARRY = 3
+
+# Decimal places per indicator. Not cosmetic: the access gap is a coefficient of
+# variation in the 0.2-0.4 range, and rounding it like a percentage collapses two
+# thirds of the world onto the single value 0.3.
+DECIMALS = {"pop": 0, "gdp": 0, "accessgap": 3}
+
+
+def write_security(years, countries, population):
+    """Emit the country-level indicators, aligned to the app's year axis.
+
+    Kept in its own file rather than folded into the commodity flows: none of it
+    varies by crop, and repeating it six times would be six times the bytes and
+    six chances to disagree with itself.
+    """
+    raw = collections.defaultdict(lambda: collections.defaultdict(dict))
+    for r in csv.DictReader(open(SECURITY, encoding="utf-8")):
+        m = norm(r["m49"])
+        if m in AGGREGATES or m == WORLD or m not in countries:
+            continue
+        try:
+            raw[m][r["indicator"]][int(r["year"])] = float(r["value"])
+        except ValueError:
+            continue
+
+    for m, byyear in population.items():
+        if m in countries:
+            raw[m]["pop"] = dict(byyear)
+
+    out, filled, carried = {}, 0, 0
+    for m in sorted(raw):
+        rec = {}
+        for key, series in raw[m].items():
+            row, last, age = [], None, 99
+            for y in years:
+                if y in series:
+                    last, age = series[y], 0
+                else:
+                    age += 1
+                row.append(None if last is None or age > MAX_CARRY
+                           else round(last, DECIMALS.get(key, 1)))
+                if row[-1] is not None:
+                    filled += 1
+                    if age:
+                        carried += 1
+            if any(v is not None for v in row):
+                rec[key] = row
+        if rec:
+            out[m] = rec
+
+    doc = {"generated": datetime.date.today().isoformat(), "years": years,
+           "maxCarry": MAX_CARRY, "indicators": INDICATOR_META, "c": out}
+    path = f"{OUT_DIR}/security.json"
+    json.dump(doc, open(path, "w", encoding="utf-8"),
+              separators=(",", ":"), ensure_ascii=False)
+    size = os.path.getsize(path) / 1e6
+    print(f"security.json: {size:.2f} MB, {len(out)} countries, "
+          f"{filled} values ({carried} carried forward)")
 
 
 main()
