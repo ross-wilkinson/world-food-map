@@ -18,6 +18,7 @@ MIN_YEAR = 2010
 # per-country denominators come from the same file and vintage as everything else.
 ITEMS = {"2511": "wheat", "2513": "barley", "2514": "maize",
          "2555": "soybeans", "2577": "palm_oil", "2807": "rice",
+         "2630": "coffee", "2542": "sugar",
          "2501": "population"}
 ELEMENTS = {"5511": "production", "5611": "imports", "5911": "exports",
             "5301": "domestic_supply", "5142": "food", "5521": "feed",

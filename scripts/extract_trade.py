@@ -21,6 +21,8 @@ CANDIDATES = {
     "30": "F0030", "31": "23161.02", "32": "23161.03",
     "44": "0115",                                                   # barley
     "256": "01491.02", "257": "2165",                               # palm
+    "656": "01610",                                                 # coffee
+    "162": "2351f",                                                 # sugar
 }
 APOS = chr(39)  # CPC codes are apostrophe-prefixed inside their quoted field
 PATTERNS = [(',"' + APOS + cpc + '",').encode() for cpc in CANDIDATES.values()]

@@ -129,7 +129,9 @@ function worldHtml(s: PanelState): string {
                : "It roughly is, so this crop moves as the raw commodity and the ranking below is close to real buyers."}</div></div>` : `
          <div class="tile wide"><div class="tile-label">Share of production that crosses a border</div>
            <div class="tile-value">${pct(traded)}</div>
-           <div class="tile-note">The rest is eaten, fed or processed at home.</div></div>`}
+           <div class="tile-note">${traded > 100
+             ? "More than was grown, because processing hubs import the crop and ship it on, so the same tonne is counted as an export twice."
+             : "The rest is eaten, fed or processed at home."}</div></div>`}
        </div>
        <div class="ctl" style="margin-top:14px">
          <span class="ctl-label">Rank &amp; shade by</span>

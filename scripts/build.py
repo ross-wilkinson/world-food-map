@@ -40,6 +40,15 @@ COMMODITIES = [
     {"id": "palm_oil", "name": "Palm oil",    "trade_items": ["257"], "fbs": "palm_oil",
      "primary": "oil",
      "note": "Trade shares cover palm oil; palm kernel oil is a separate commodity."},
+    {"id": "coffee",   "name": "Coffee",      "trade_items": ["656"], "fbs": "coffee",
+     "primary": "green coffee",
+     "note": "Trade shares cover green (unroasted) coffee; roasted coffee and extracts "
+             "are excluded. Coffee carries almost no calories, so it reads as low "
+             "exposure however much a country imports."},
+    {"id": "sugar",    "name": "Sugar",       "trade_items": ["162"], "fbs": "sugar",
+     "primary": "raw sugar",
+     "note": "Trade shares cover raw cane and beet sugar; refined sugar is a separate "
+             "commodity, so white-sugar refiners and their customers are undercounted."},
 ]
 
 # M49 codes that are regions/economic groupings, not countries.

@@ -1,7 +1,7 @@
 # World Food Map
 
 An interactive globe showing where each country's staple crops come from and where
-they go — wheat, maize, rice, barley, soybeans and palm oil, 2010–2023, in tonnes.
+they go — wheat, maize, rice, barley, soybeans, palm oil, coffee and sugar, 2010–2023, in tonnes.
 
 Pick a country and the globe turns to face it, then animated great-circle arcs flow
 in from its suppliers (or out to its customers) with the share each one accounts for
@@ -148,7 +148,7 @@ npm run check:interactions   # hover, playback, mirrored data, edge cases
 
 ## Deploying
 
-GitHub Pages is sufficient — it's a static site, the whole payload is about 3.4 MB
+GitHub Pages is sufficient — it's a static site, the whole payload is about 5.4 MB
 with data, and Pages' 1 GB repo and 100 GB/month soft limits are nowhere near
 binding. `.github/workflows/deploy.yml` builds and publishes on every push to `main`.
 
